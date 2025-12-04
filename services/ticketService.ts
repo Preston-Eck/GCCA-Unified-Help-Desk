@@ -1,39 +1,44 @@
-import { Ticket, TicketStatus, Department, Campus, UserConfig, Priority } from "../types";
+
+import { Ticket, TicketStatus, Department, UserConfig, Priority } from "../types";
 
 // --- Mock Database (Simulating the Sheet) ---
+// Note: This file seems redundant with dataService.ts but fixing types as requested.
 let tickets: Ticket[] = [
   {
-    id: 'T-1001',
-    requestorEmail: 'teacher@gcca.edu',
-    department: Department.IT,
-    campus: Campus.MADISON_AVE,
-    locationDetails: 'Room 302',
-    description: 'Projector is flickering blue.',
-    status: TicketStatus.NEW,
-    priority: Priority.MEDIUM,
-    createdAt: Date.now() - 86400000
+    TicketID: 'T-1001',
+    Submitter_Email: 'teacher@gcca.edu',
+    Category: Department.IT,
+    CampusID_Ref: 'CAMP-MAD',
+    LocationID_Ref: 'Room 302',
+    Title: 'Projector Issue',
+    Description: 'Projector is flickering blue.',
+    Status: TicketStatus.NEW,
+    Priority: Priority.MEDIUM,
+    Date_Submitted: new Date(Date.now() - 86400000).toISOString()
   },
   {
-    id: 'T-1002',
-    requestorEmail: 'coach@gcca.edu',
-    department: Department.FACILITIES,
-    campus: Campus.MILL_ST,
-    locationDetails: 'Gymnasium',
-    description: 'Bleacher motor stuck.',
-    status: TicketStatus.PENDING_APPROVAL, // Logic: Mill St Facilities needs approval
-    priority: Priority.HIGH,
-    createdAt: Date.now() - 172800000
+    TicketID: 'T-1002',
+    Submitter_Email: 'coach@gcca.edu',
+    Category: Department.FACILITIES,
+    CampusID_Ref: 'CAMP-MIL',
+    LocationID_Ref: 'Gymnasium',
+    Title: 'Bleacher Stuck',
+    Description: 'Bleacher motor stuck.',
+    Status: TicketStatus.PENDING_APPROVAL,
+    Priority: Priority.HIGH,
+    Date_Submitted: new Date(Date.now() - 172800000).toISOString()
   },
   {
-    id: 'T-1003',
-    requestorEmail: 'admin@gcca.edu',
-    department: Department.FACILITIES,
-    campus: Campus.MADISON_AVE,
-    locationDetails: 'Main Office',
-    description: 'Wall paint chipping.',
-    status: TicketStatus.PENDING_APPROVAL, // Logic: Madison Ave Facilities needs approval
-    priority: Priority.LOW,
-    createdAt: Date.now() - 40000000
+    TicketID: 'T-1003',
+    Submitter_Email: 'admin@gcca.edu',
+    Category: Department.FACILITIES,
+    CampusID_Ref: 'CAMP-MAD',
+    LocationID_Ref: 'Main Office',
+    Title: 'Wall Paint',
+    Description: 'Wall paint chipping.',
+    Status: TicketStatus.PENDING_APPROVAL,
+    Priority: Priority.LOW,
+    Date_Submitted: new Date(Date.now() - 40000000).toISOString()
   }
 ];
 
@@ -42,30 +47,28 @@ export const MOCK_USERS: UserConfig[] = [
   { email: 'staff@gcca.edu', name: 'Standard Staff', role: 'Staff' },
   { email: 'it.chair@gcca.edu', name: 'IT Chair (Jaron)', role: 'Chair', department: Department.IT },
   { email: 'fac.chair@gcca.edu', name: 'Facilities Chair', role: 'Chair', department: Department.FACILITIES },
-  { email: 'principal.madison@gcca.edu', name: 'Principal Madison', role: 'Approver', campus: Campus.MADISON_AVE },
-  { email: 'principal.mill@gcca.edu', name: 'Principal Mill', role: 'Approver', campus: Campus.MILL_ST },
+  { email: 'principal.madison@gcca.edu', name: 'Principal Madison', role: 'Approver', campus: 'CAMP-MAD' },
+  { email: 'principal.mill@gcca.edu', name: 'Principal Mill', role: 'Approver', campus: 'CAMP-MIL' },
   { email: 'tech.it@gcca.edu', name: 'IT Technician', role: 'Tech', department: Department.IT },
 ];
 
-// --- Logic Implementation (The "Code.gs" equivalent) ---
+// --- Logic Implementation ---
 
-export const submitTicket = (ticketData: Omit<Ticket, 'id' | 'createdAt' | 'status'>): Ticket => {
+export const submitTicket = (ticketData: Omit<Ticket, 'TicketID' | 'Date_Submitted' | 'Status'>): Ticket => {
   let initialStatus = TicketStatus.NEW;
 
   // WORKFLOW LOGIC:
-  // 1. If IT -> New
-  // 2. If Facilities AND (Madison OR Mill) -> Pending Approval
-  if (ticketData.department === Department.FACILITIES) {
-    if (ticketData.campus === Campus.MADISON_AVE || ticketData.campus === Campus.MILL_ST) {
+  if (ticketData.Category === Department.FACILITIES) {
+    if (ticketData.CampusID_Ref === 'CAMP-MAD' || ticketData.CampusID_Ref === 'CAMP-MIL') {
       initialStatus = TicketStatus.PENDING_APPROVAL;
     }
   }
 
   const newTicket: Ticket = {
     ...ticketData,
-    id: `T-${Math.floor(1000 + Math.random() * 9000)}`,
-    createdAt: Date.now(),
-    status: initialStatus
+    TicketID: `T-${Math.floor(1000 + Math.random() * 9000)}`,
+    Date_Submitted: new Date().toISOString(),
+    Status: initialStatus
   };
 
   tickets = [newTicket, ...tickets];
@@ -77,34 +80,34 @@ export const getTicketsForUser = (user: UserConfig): Ticket[] => {
   
   // 1. Chairs see ALL tickets for their department
   if (user.role === 'Chair') {
-    return tickets.filter(t => t.department === user.department);
+    return tickets.filter(t => t.Category === user.department);
   }
 
   // 2. Approvers (Principals) only see Pending Approval tickets for their specific campus
   if (user.role === 'Approver') {
     return tickets.filter(t => 
-      t.status === TicketStatus.PENDING_APPROVAL && 
-      t.department === Department.FACILITIES && 
-      t.campus === user.campus
+      t.Status === TicketStatus.PENDING_APPROVAL && 
+      t.Category === Department.FACILITIES && 
+      t.CampusID_Ref === user.campus
     );
   }
 
   // 3. Techs only see tickets assigned to them OR unassigned New tickets in their department
   if (user.role === 'Tech') {
     return tickets.filter(t => 
-      (t.assignedTo === user.email) || 
-      (t.department === user.department && t.status === TicketStatus.NEW && !t.assignedTo)
+      (t.Assigned_Staff === user.email) || 
+      (t.Category === user.department && t.Status === TicketStatus.NEW && !t.Assigned_Staff)
     );
   }
 
   // 4. Regular staff see only their own tickets
-  return tickets.filter(t => t.requestorEmail === user.email);
+  return tickets.filter(t => t.Submitter_Email === user.email);
 };
 
 export const approveTicket = (ticketId: string) => {
-  tickets = tickets.map(t => t.id === ticketId ? { ...t, status: TicketStatus.NEW } : t);
+  tickets = tickets.map(t => t.TicketID === ticketId ? { ...t, Status: TicketStatus.NEW } : t);
 };
 
 export const resolveTicket = (ticketId: string) => {
-  tickets = tickets.map(t => t.id === ticketId ? { ...t, status: TicketStatus.RESOLVED } : t);
+  tickets = tickets.map(t => t.TicketID === ticketId ? { ...t, Status: TicketStatus.RESOLVED } : t);
 };

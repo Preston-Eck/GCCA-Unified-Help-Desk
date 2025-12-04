@@ -1,109 +1,117 @@
+
 import React, { useState } from 'react';
+import { USERS_DB, validateUser } from './services/dataService';
 import TicketForm from './components/TicketForm';
 import TicketDashboard from './components/TicketDashboard';
-import { MOCK_USERS } from './services/ticketService';
-import { UserConfig } from './types';
-import { ShieldCheck, PlusCircle, LayoutDashboard } from 'lucide-react';
+import { AccessDenied } from './components/AccessDenied';
+import { LayoutDashboard, PlusCircle, LogOut } from 'lucide-react';
 
 export default function App() {
-  // Simulating Session.getActiveUser()
-  const [currentUser, setCurrentUser] = useState<UserConfig>(MOCK_USERS[0]);
-  const [view, setView] = useState<'form' | 'dashboard'>('dashboard');
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  // Simulating the "Authenticated User" from Session.getActiveUser()
+  // Defaulting to the first user in the DB for demo purposes
+  const [currentUserEmail, setCurrentUserEmail] = useState(USERS_DB[0].Email);
+  const [currentView, setCurrentView] = useState<'form' | 'dashboard'>('dashboard');
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const refreshData = () => setRefreshTrigger(prev => prev + 1);
+  const currentUser = validateUser(currentUserEmail);
+
+  if (!currentUser) {
+    return <AccessDenied />;
+  }
+
+  const handleRefresh = () => setRefreshKey(prev => prev + 1);
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
-      {/* Header */}
-      <header className="bg-hunter-green text-white shadow-lg sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ShieldCheck className="w-8 h-8 text-gcca-gold" />
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">GCCA Unified Help Desk</h1>
-              <p className="text-xs text-gray-300">IT & Facilities</p>
+    <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-900">
+      
+      {/* Navbar */}
+      <nav className="bg-[#355E3B] text-white shadow-lg sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16 items-center">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-[#FFD700] rounded-sm flex items-center justify-center text-[#355E3B] font-bold">
+                HD
+              </div>
+              <span className="font-bold text-lg tracking-wide">Unified Help Desk</span>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            {/* Simulation Controls - Would not exist in production */}
-            <div className="hidden md:flex items-center gap-2 bg-[#2a4b2f] p-1 rounded-lg">
-              <span className="text-xs text-gray-300 px-2">Simulate User:</span>
+            
+            {/* User Simulation Switcher (For Demo Only) */}
+            <div className="hidden md:flex items-center gap-4">
+              <span className="text-xs text-green-200">Simulate Identity:</span>
               <select 
-                className="bg-transparent text-sm text-white font-medium focus:outline-none border-none cursor-pointer"
-                value={currentUser.email}
+                value={currentUserEmail}
                 onChange={(e) => {
-                  const user = MOCK_USERS.find(u => u.email === e.target.value);
-                  if (user) setCurrentUser(user);
-                  refreshData();
+                  setCurrentUserEmail(e.target.value);
+                  handleRefresh();
                 }}
+                className="bg-[#2a4b2f] border border-green-800 text-sm rounded px-2 py-1 text-white focus:outline-none"
               >
-                {MOCK_USERS.map(u => (
-                  <option key={u.email} value={u.email} className="text-black">
-                    {u.name} ({u.role})
+                {USERS_DB.map(u => (
+                  <option key={u.UserID} value={u.Email}>
+                    {u.Name} ({u.User_Type})
                   </option>
                 ))}
+                <option value="invalid@gcca.edu">Unauthorized User</option>
               </select>
             </div>
           </div>
         </div>
-      </header>
+      </nav>
 
-      {/* Main Content */}
+      {/* Main Layout */}
       <main className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Navigation Tabs */}
-        <div className="flex gap-4 mb-6">
+        <div className="flex gap-4 mb-8">
           <button
-            onClick={() => setView('dashboard')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-all ${
-              view === 'dashboard' 
-                ? 'bg-hunter-green text-white shadow-md' 
-                : 'bg-white text-gray-600 hover:bg-gray-50'
+            onClick={() => setCurrentView('dashboard')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all shadow-sm ${
+              currentView === 'dashboard'
+                ? 'bg-white text-[#355E3B] ring-2 ring-[#355E3B]'
+                : 'bg-white text-gray-500 hover:text-[#355E3B] hover:bg-gray-50'
             }`}
           >
-            <LayoutDashboard className="w-4 h-4" />
-            My Dashboard
+            <LayoutDashboard className="w-5 h-5" />
+            Dashboard
           </button>
           
           <button
-            onClick={() => setView('form')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-all ${
-              view === 'form' 
-                ? 'bg-hunter-green text-white shadow-md' 
-                : 'bg-white text-gray-600 hover:bg-gray-50'
+            onClick={() => setCurrentView('form')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all shadow-sm ${
+              currentView === 'form'
+                ? 'bg-white text-[#355E3B] ring-2 ring-[#355E3B]'
+                : 'bg-white text-gray-500 hover:text-[#355E3B] hover:bg-gray-50'
             }`}
           >
-            <PlusCircle className="w-4 h-4" />
+            <PlusCircle className="w-5 h-5" />
             New Ticket
           </button>
         </div>
 
-        {/* Dynamic View */}
+        {/* Content Area */}
         <div className="animate-in fade-in duration-300">
-          {view === 'form' ? (
+          {currentView === 'form' ? (
             <TicketForm 
-              userEmail={currentUser.email} 
+              userEmail={currentUser.Email} 
               onSuccess={() => {
-                refreshData();
-                setView('dashboard');
-              }} 
+                handleRefresh();
+                setCurrentView('dashboard');
+              }}
             />
           ) : (
             <TicketDashboard 
-              currentUser={currentUser} 
-              refreshTrigger={refreshTrigger}
-              onRefresh={refreshData}
+              user={currentUser} 
+              refreshKey={refreshKey}
+              onRefresh={handleRefresh}
             />
           )}
         </div>
+
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 py-6 text-center text-sm text-gray-500">
-          &copy; {new Date().getFullYear()} Grove City Christian Academy. Internal Use Only.
+      <footer className="bg-white border-t border-gray-200 py-6 mt-8">
+        <div className="max-w-7xl mx-auto px-4 text-center text-sm text-gray-500">
+          <p>&copy; {new Date().getFullYear()} Grove City Christian Academy. Internal Use Only.</p>
         </div>
       </footer>
     </div>
