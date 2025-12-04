@@ -1,5 +1,4 @@
-
-import { Ticket, User, Campus, Building, Location, Asset } from '../types';
+import { Ticket, User, Campus, Building, Location, Asset, Priority } from '../types';
 
 // --- 1. The Database (Mock Sheets) ---
 
@@ -51,6 +50,7 @@ let TICKETS_DB: Ticket[] = [
     Description: 'Hard to see slides.',
     Category: 'IT',
     Status: 'New',
+    Priority: Priority.MEDIUM,
     Assigned_Staff: ''
   },
   {
@@ -64,6 +64,7 @@ let TICKETS_DB: Ticket[] = [
     Description: 'Drips constantly.',
     Category: 'Facilities',
     Status: 'Pending Approval', // Workflow logic test
+    Priority: Priority.LOW,
     Assigned_Staff: ''
   }
 ];
@@ -98,6 +99,7 @@ export const submitTicket = (
     category: 'IT' | 'Facilities';
     title: string;
     description: string;
+    priority?: Priority;
   }
 ): Ticket => {
   let status: Ticket['Status'] = 'New';
@@ -123,6 +125,7 @@ export const submitTicket = (
     Description: data.description,
     Category: data.category,
     Status: status,
+    Priority: data.priority || Priority.MEDIUM,
     AI_Suggested_Plan: 'Analyzing...', // Placeholder for AI integration
   };
 

@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
-import { Building, Location, Asset } from '../types';
+import { Building, Location, Asset, Priority } from '../types';
 import { 
   getCampuses, getBuildings, getLocations, getAssets, submitTicket 
 } from '../services/dataService';
-import { Send, Loader2 } from 'lucide-react';
+import { analyzeTicketPriority } from '../services/geminiService';
+import { Send, Loader2, Sparkles } from 'lucide-react';
 
 interface Props {
   userEmail: string;
@@ -28,6 +28,10 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // AI State
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [suggestedPriority, setSuggestedPriority] = useState<Priority | null>(null);
 
   // --- Cascading Effects ---
 
@@ -64,6 +68,18 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
     }
   }, [locationId]);
 
+  // AI Analysis Function
+  const handleSmartAnalysis = async () => {
+    if (!description) return;
+    setIsAnalyzing(true);
+    
+    // Call the service
+    const result = await analyzeTicketPriority(description, department);
+    
+    setSuggestedPriority(result);
+    setIsAnalyzing(false);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -76,7 +92,8 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
         assetId,
         category: department,
         title,
-        description
+        description,
+        priority: suggestedPriority || Priority.MEDIUM
       });
       setIsSubmitting(false);
       onSuccess();
@@ -191,15 +208,44 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Full Description</label>
-          <textarea 
-            required
-            rows={4}
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-[#355E3B] focus:outline-none"
-            placeholder="Describe the issue in detail..."
-          />
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Full Description 
+            <span className="text-xs font-normal text-gray-500 ml-2">(Be specific)</span>
+          </label>
+          <div className="relative">
+            <textarea 
+              required
+              rows={4}
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-[#355E3B] focus:outline-none"
+              placeholder="Describe the issue in detail..."
+            />
+            
+            {/* The AI Trigger Button */}
+            <button
+              type="button"
+              onClick={handleSmartAnalysis}
+              disabled={!description || isAnalyzing}
+              className="absolute bottom-3 right-3 flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors border border-indigo-200"
+            >
+              {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              {isAnalyzing ? 'Analyzing...' : 'Smart Triage'}
+            </button>
+          </div>
+
+          {/* AI Feedback Area */}
+          {suggestedPriority && (
+            <div className="mt-3 flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+              <span className="text-sm text-gray-500">AI Suggested Priority:</span>
+              <span className={`text-xs font-bold px-2 py-1 rounded uppercase tracking-wide
+                ${suggestedPriority === Priority.CRITICAL ? 'bg-red-100 text-red-800' : 
+                  suggestedPriority === Priority.HIGH ? 'bg-orange-100 text-orange-800' : 
+                  'bg-blue-100 text-blue-800'}`}>
+                {suggestedPriority}
+              </span>
+            </div>
+          )}
         </div>
 
         <button 
