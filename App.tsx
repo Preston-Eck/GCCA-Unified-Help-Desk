@@ -1,25 +1,30 @@
 
 import React, { useState } from 'react';
-import { USERS_DB, validateUser } from './services/dataService';
+import { USERS_DB, validateUser, getAppConfig } from './services/dataService';
 import TicketForm from './components/TicketForm';
 import TicketDashboard from './components/TicketDashboard';
+import AdminPanel from './components/AdminPanel';
+import AssetManager from './components/AssetManager';
 import { AccessDenied } from './components/AccessDenied';
-import { LayoutDashboard, PlusCircle, LogOut } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Settings, Database } from 'lucide-react';
 
 export default function App() {
-  // Simulating the "Authenticated User" from Session.getActiveUser()
-  // Defaulting to the first user in the DB for demo purposes
   const [currentUserEmail, setCurrentUserEmail] = useState(USERS_DB[0].Email);
-  const [currentView, setCurrentView] = useState<'form' | 'dashboard'>('dashboard');
+  const [currentView, setCurrentView] = useState<'form' | 'dashboard' | 'admin' | 'assets'>('dashboard');
   const [refreshKey, setRefreshKey] = useState(0);
 
   const currentUser = validateUser(currentUserEmail);
+  const config = getAppConfig();
 
   if (!currentUser) {
     return <AccessDenied />;
   }
 
   const handleRefresh = () => setRefreshKey(prev => prev + 1);
+  const isAdmin = currentUser.User_Type.includes('Admin');
+  const isChair = currentUser.User_Type.includes('Chair');
+  const isApprover = currentUser.User_Type.includes('Approver');
+  const canManageAssets = isAdmin || isChair || isApprover;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-900">
@@ -29,40 +34,42 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-[#FFD700] rounded-sm flex items-center justify-center text-[#355E3B] font-bold">
+              <div className="w-8 h-8 bg-[#FFD700] rounded-sm flex items-center justify-center text-gray-900 font-bold">
                 HD
               </div>
-              <span className="font-bold text-lg tracking-wide">Unified Help Desk</span>
+              <span className="font-bold text-lg tracking-wide hidden sm:block">{config.appName}</span>
+              <span className="font-bold text-lg tracking-wide sm:hidden">Help Desk</span>
             </div>
             
-            {/* User Simulation Switcher (For Demo Only) */}
-            <div className="hidden md:flex items-center gap-4">
-              <span className="text-xs text-green-200">Simulate Identity:</span>
-              <select 
-                value={currentUserEmail}
-                onChange={(e) => {
-                  setCurrentUserEmail(e.target.value);
-                  handleRefresh();
-                }}
-                className="bg-[#2a4b2f] border border-green-800 text-sm rounded px-2 py-1 text-white focus:outline-none"
-              >
-                {USERS_DB.map(u => (
-                  <option key={u.UserID} value={u.Email}>
-                    {u.Name} ({u.User_Type})
-                  </option>
-                ))}
-                <option value="invalid@gcca.edu">Unauthorized User</option>
-              </select>
+            <div className="flex items-center gap-4">
+              <div className="hidden md:flex items-center gap-2">
+                 <span className="text-xs text-green-200">Simulate:</span>
+                 <select 
+                    value={currentUserEmail}
+                    onChange={(e) => {
+                      setCurrentUserEmail(e.target.value);
+                      handleRefresh();
+                      setCurrentView('dashboard');
+                    }}
+                    className="bg-[#2a4b2f] border border-green-800 text-sm rounded px-2 py-1 text-white focus:outline-none max-w-[150px] truncate"
+                  >
+                    {USERS_DB.map(u => (
+                      <option key={u.UserID} value={u.Email}>
+                        {u.Name} ({u.User_Type})
+                      </option>
+                    ))}
+                    <option value="invalid@gcca.edu">Unauthorized User</option>
+                  </select>
+              </div>
             </div>
           </div>
         </div>
       </nav>
 
-      {/* Main Layout */}
       <main className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Navigation Tabs */}
-        <div className="flex gap-4 mb-8">
+        <div className="flex flex-wrap gap-4 mb-8">
           <button
             onClick={() => setCurrentView('dashboard')}
             className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all shadow-sm ${
@@ -86,11 +93,38 @@ export default function App() {
             <PlusCircle className="w-5 h-5" />
             New Ticket
           </button>
+
+          {canManageAssets && (
+             <button
+              onClick={() => setCurrentView('assets')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all shadow-sm ${
+                currentView === 'assets'
+                  ? 'bg-white text-[#355E3B] ring-2 ring-[#355E3B]'
+                  : 'bg-white text-gray-500 hover:text-[#355E3B] hover:bg-gray-50'
+              }`}
+            >
+              <Database className="w-5 h-5" />
+              Assets
+            </button>
+          )}
+
+          {isAdmin && (
+            <button
+              onClick={() => setCurrentView('admin')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all shadow-sm ${
+                currentView === 'admin'
+                  ? 'bg-white text-[#355E3B] ring-2 ring-[#355E3B]'
+                  : 'bg-white text-gray-500 hover:text-[#355E3B] hover:bg-gray-50'
+              }`}
+            >
+              <Settings className="w-5 h-5" />
+              Admin
+            </button>
+          )}
         </div>
 
-        {/* Content Area */}
         <div className="animate-in fade-in duration-300">
-          {currentView === 'form' ? (
+          {currentView === 'form' && (
             <TicketForm 
               userEmail={currentUser.Email} 
               onSuccess={() => {
@@ -98,12 +132,22 @@ export default function App() {
                 setCurrentView('dashboard');
               }}
             />
-          ) : (
+          )}
+
+          {currentView === 'dashboard' && (
             <TicketDashboard 
               user={currentUser} 
               refreshKey={refreshKey}
               onRefresh={handleRefresh}
             />
+          )}
+
+          {currentView === 'assets' && canManageAssets && (
+            <AssetManager user={currentUser} />
+          )}
+
+          {currentView === 'admin' && isAdmin && (
+             <AdminPanel onSuccess={handleRefresh} />
           )}
         </div>
 
@@ -111,7 +155,7 @@ export default function App() {
 
       <footer className="bg-white border-t border-gray-200 py-6 mt-8">
         <div className="max-w-7xl mx-auto px-4 text-center text-sm text-gray-500">
-          <p>&copy; {new Date().getFullYear()} Grove City Christian Academy. Internal Use Only.</p>
+          <p>&copy; {new Date().getFullYear()} {config.appName}. Internal Use Only.</p>
         </div>
       </footer>
     </div>

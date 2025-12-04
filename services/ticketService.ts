@@ -14,7 +14,9 @@ let tickets: Ticket[] = [
     Description: 'Projector is flickering blue.',
     Status: TicketStatus.NEW,
     Priority: Priority.MEDIUM,
-    Date_Submitted: new Date(Date.now() - 86400000).toISOString()
+    Date_Submitted: new Date(Date.now() - 86400000).toISOString(),
+    Comments: [],
+    IsPublic: false
   },
   {
     TicketID: 'T-1002',
@@ -26,7 +28,9 @@ let tickets: Ticket[] = [
     Description: 'Bleacher motor stuck.',
     Status: TicketStatus.PENDING_APPROVAL,
     Priority: Priority.HIGH,
-    Date_Submitted: new Date(Date.now() - 172800000).toISOString()
+    Date_Submitted: new Date(Date.now() - 172800000).toISOString(),
+    Comments: [],
+    IsPublic: false
   },
   {
     TicketID: 'T-1003',
@@ -38,7 +42,9 @@ let tickets: Ticket[] = [
     Description: 'Wall paint chipping.',
     Status: TicketStatus.PENDING_APPROVAL,
     Priority: Priority.LOW,
-    Date_Submitted: new Date(Date.now() - 40000000).toISOString()
+    Date_Submitted: new Date(Date.now() - 40000000).toISOString(),
+    Comments: [],
+    IsPublic: false
   }
 ];
 
@@ -54,7 +60,7 @@ export const MOCK_USERS: UserConfig[] = [
 
 // --- Logic Implementation ---
 
-export const submitTicket = (ticketData: Omit<Ticket, 'TicketID' | 'Date_Submitted' | 'Status'>): Ticket => {
+export const submitTicket = (ticketData: Omit<Ticket, 'TicketID' | 'Date_Submitted' | 'Status' | 'Comments' | 'IsPublic'>): Ticket => {
   let initialStatus = TicketStatus.NEW;
 
   // WORKFLOW LOGIC:
@@ -68,7 +74,9 @@ export const submitTicket = (ticketData: Omit<Ticket, 'TicketID' | 'Date_Submitt
     ...ticketData,
     TicketID: `T-${Math.floor(1000 + Math.random() * 9000)}`,
     Date_Submitted: new Date().toISOString(),
-    Status: initialStatus
+    Status: initialStatus,
+    Comments: [],
+    IsPublic: false
   };
 
   tickets = [newTicket, ...tickets];

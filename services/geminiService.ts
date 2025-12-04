@@ -42,3 +42,31 @@ export const analyzeTicketPriority = async (description: string, department: str
     return Priority.MEDIUM;
   }
 };
+
+export const refineTicketDescription = async (rawText: string, department: string): Promise<string> => {
+  if (!process.env.API_KEY || !rawText) return rawText;
+
+  try {
+    const model = 'gemini-2.5-flash';
+    const prompt = `
+      You are a helpful IT and Facilities support assistant.
+      The user has submitted a raw description for a ${department} ticket: "${rawText}".
+      
+      Please rewrite this to be clearer, more professional, and concise. 
+      If vague, ask a clarifying question in parenthesis.
+      Example Input: "internet bad" -> Output: "Internet connectivity is intermittent/slow. (Is this wired or wifi?)"
+      
+      Return ONLY the rewritten text.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: prompt,
+    });
+
+    return response.text?.trim() || rawText;
+  } catch (error) {
+    console.error("Gemini refinement failed:", error);
+    return rawText;
+  }
+};

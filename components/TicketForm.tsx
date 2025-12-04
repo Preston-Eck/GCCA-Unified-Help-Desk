@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { Building, Location, Asset, Priority } from '../types';
 import { 
-  getCampuses, getBuildings, getLocations, getAssets, submitTicket 
+  getCampuses, getBuildings, getLocations, getAssets, submitTicket, addLocation, addAsset 
 } from '../services/dataService';
-import { analyzeTicketPriority } from '../services/geminiService';
-import { Send, Loader2, Sparkles } from 'lucide-react';
+import { analyzeTicketPriority, refineTicketDescription } from '../services/geminiService';
+import { Send, Loader2, Sparkles, Wand2, PlusCircle } from 'lucide-react';
 
 interface Props {
   userEmail: string;
@@ -12,72 +13,70 @@ interface Props {
 }
 
 const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
-  // Cascading State
   const [department, setDepartment] = useState<'IT' | 'Facilities'>('IT');
   const [campusId, setCampusId] = useState('');
   const [buildingId, setBuildingId] = useState('');
   const [locationId, setLocationId] = useState('');
   const [assetId, setAssetId] = useState('');
   
-  // Data State for Dropdowns
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
 
-  // Text State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // AI State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [suggestedPriority, setSuggestedPriority] = useState<Priority | null>(null);
 
-  // --- Cascading Effects ---
-
-  // 1. When Campus changes -> Load Buildings, Reset downstream
+  // Cascading Effects
   useEffect(() => {
-    setBuildingId('');
-    setLocationId('');
-    setAssetId('');
-    if (campusId) {
-      setBuildings(getBuildings(campusId));
-    } else {
-      setBuildings([]);
-    }
+    setBuildingId(''); setLocationId(''); setAssetId('');
+    if (campusId) setBuildings(getBuildings(campusId));
+    else setBuildings([]);
   }, [campusId]);
 
-  // 2. When Building changes -> Load Locations, Reset downstream
   useEffect(() => {
-    setLocationId('');
-    setAssetId('');
-    if (buildingId) {
-      setLocations(getLocations(buildingId));
-    } else {
-      setLocations([]);
-    }
+    setLocationId(''); setAssetId('');
+    if (buildingId) setLocations(getLocations(buildingId));
+    else setLocations([]);
   }, [buildingId]);
 
-  // 3. When Location changes -> Load Assets, Reset downstream
   useEffect(() => {
     setAssetId('');
-    if (locationId) {
-      setAssets(getAssets(locationId));
-    } else {
-      setAssets([]);
-    }
+    if (locationId) setAssets(getAssets(locationId));
+    else setAssets([]);
   }, [locationId]);
 
-  // AI Analysis Function
   const handleSmartAnalysis = async () => {
     if (!description) return;
     setIsAnalyzing(true);
-    
-    // Call the service
     const result = await analyzeTicketPriority(description, department);
-    
     setSuggestedPriority(result);
     setIsAnalyzing(false);
+  };
+
+  const handleRefineDescription = async () => {
+    if (!description) return;
+    setIsAnalyzing(true);
+    const polishedText = await refineTicketDescription(description, department);
+    setDescription(polishedText); 
+    setIsAnalyzing(false);
+  };
+
+  const handleRequestNew = (type: 'Location' | 'Asset') => {
+    const name = prompt(`Enter name for new ${type}:`);
+    if (!name) return;
+
+    if (type === 'Location' && buildingId) {
+      addLocation(buildingId, name + " (Requested)");
+      setLocations(getLocations(buildingId)); // refresh
+      // auto-select last added logic omitted for brevity, user can select from dropdown
+    } else if (type === 'Asset' && locationId) {
+      addAsset(locationId, name + " (Requested)");
+      setAssets(getAssets(locationId));
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -109,7 +108,6 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
       
       <form onSubmit={handleSubmit} className="space-y-5">
         
-        {/* Department Selection */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1">Department</label>
           <div className="flex gap-4">
@@ -125,7 +123,6 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Level 1: Campus */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Campus</label>
             <select 
@@ -141,7 +138,6 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
             </select>
           </div>
 
-          {/* Level 2: Building */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Building</label>
             <select 
@@ -149,7 +145,7 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
               disabled={!campusId}
               value={buildingId} 
               onChange={e => setBuildingId(e.target.value)}
-              className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-[#355E3B] focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
+              className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-[#355E3B] focus:outline-none disabled:bg-gray-100"
             >
               <option value="">-- Select Building --</option>
               {buildings.map(b => (
@@ -160,15 +156,21 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Level 3: Location */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Specific Location</label>
+            <div className="flex justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">Specific Location</label>
+              {buildingId && (
+                <button type="button" onClick={() => handleRequestNew('Location')} className="text-xs text-[#355E3B] hover:underline flex items-center gap-1">
+                  <PlusCircle className="w-3 h-3" /> Not listed?
+                </button>
+              )}
+            </div>
             <select 
               required
               disabled={!buildingId}
               value={locationId} 
               onChange={e => setLocationId(e.target.value)}
-              className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-[#355E3B] focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
+              className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-[#355E3B] focus:outline-none disabled:bg-gray-100"
             >
               <option value="">-- Select Location --</option>
               {locations.map(l => (
@@ -177,14 +179,20 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
             </select>
           </div>
 
-          {/* Level 4: Asset (Optional) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Related Asset (Optional)</label>
+            <div className="flex justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">Related Asset (Optional)</label>
+              {locationId && (
+                <button type="button" onClick={() => handleRequestNew('Asset')} className="text-xs text-[#355E3B] hover:underline flex items-center gap-1">
+                  <PlusCircle className="w-3 h-3" /> Not listed?
+                </button>
+              )}
+            </div>
             <select 
               disabled={!locationId}
               value={assetId} 
               onChange={e => setAssetId(e.target.value)}
-              className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-[#355E3B] focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
+              className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-[#355E3B] focus:outline-none disabled:bg-gray-100"
             >
               <option value="">-- Select Asset --</option>
               {assets.map(a => (
@@ -194,7 +202,6 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
           </div>
         </div>
 
-        {/* Issue Details */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Issue Title</label>
           <input 
@@ -208,10 +215,21 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Full Description 
-            <span className="text-xs font-normal text-gray-500 ml-2">(Be specific)</span>
-          </label>
+          <div className="flex justify-between items-end mb-1">
+            <label className="block text-sm font-medium text-gray-700">
+              Full Description 
+              <span className="text-xs font-normal text-gray-500 ml-2">(Be specific)</span>
+            </label>
+            <button
+              type="button"
+              onClick={handleRefineDescription}
+              disabled={!description || isAnalyzing}
+              className="text-xs flex items-center gap-1 text-[#355E3B] hover:text-green-700 underline decoration-dotted disabled:opacity-50"
+            >
+              {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+              AI Polish
+            </button>
+          </div>
           <div className="relative">
             <textarea 
               required
@@ -222,19 +240,17 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
               placeholder="Describe the issue in detail..."
             />
             
-            {/* The AI Trigger Button */}
             <button
               type="button"
               onClick={handleSmartAnalysis}
               disabled={!description || isAnalyzing}
-              className="absolute bottom-3 right-3 flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors border border-indigo-200"
+              className="absolute bottom-3 right-3 flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors border border-indigo-200 disabled:opacity-50"
             >
               {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
               {isAnalyzing ? 'Analyzing...' : 'Smart Triage'}
             </button>
           </div>
 
-          {/* AI Feedback Area */}
           {suggestedPriority && (
             <div className="mt-3 flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
               <span className="text-sm text-gray-500">AI Suggested Priority:</span>

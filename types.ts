@@ -9,6 +9,13 @@ export interface User {
   Department: string; // "IT" or "Facilities"
 }
 
+export interface SiteConfig {
+  appName: string;
+  unauthorizedMessage: string;
+  supportContact: string;
+  announcementBanner: string;
+}
+
 export interface Campus {
   CampusID: string;
   Campus_Name: string;
@@ -30,6 +37,14 @@ export interface Asset {
   AssetID: string;
   LocationID_Ref: string;
   Asset_Name: string;
+}
+
+export interface TicketComment {
+  CommentID: string;
+  Author_Email: string;
+  Timestamp: string;
+  Text: string;
+  IsStatusChange?: boolean; // If true, this is a system log
 }
 
 export enum Priority {
@@ -57,9 +72,9 @@ export interface Ticket {
   Date_Submitted: string; // ISO String
   Submitter_Email: string;
   CampusID_Ref: string;
-  BuildingID_Ref?: string; // Added to support Dashboard view
+  BuildingID_Ref?: string;
   LocationID_Ref: string;
-  Related_AssetID_Ref?: string; // Optional
+  Related_AssetID_Ref?: string; 
   Title: string;
   Description: string;
   Category: 'IT' | 'Facilities';
@@ -68,11 +83,15 @@ export interface Ticket {
   Assigned_Staff?: string; // Email
   AI_Suggested_Plan?: string;
   AI_Questions?: string;
+  
+  // New Fields
+  Comments: TicketComment[];
+  IsPublic: boolean;
 }
 
 // --- Helper Types for UI ---
 export interface ViewState {
-  currentView: 'form' | 'dashboard';
+  currentView: 'form' | 'dashboard' | 'admin' | 'assets';
 }
 
 export interface UserConfig {
