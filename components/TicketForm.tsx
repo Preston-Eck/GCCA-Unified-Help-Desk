@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { Building, Location, Asset, Priority, SOP } from '../types';
 import { 
-  getCampuses, getBuildings, getLocations, getAssets, submitTicket, addLocation, addAsset, getSOPsForAsset 
+  getCampuses, getBuildings, getLocations, getAssets, submitTicket, addLocation, addAsset, getSOPsForAsset, uploadFile 
 } from '../services/dataService';
 import { analyzeTicketPriority, refineTicketDescription } from '../services/geminiService';
-import { Send, Loader2, Sparkles, Wand2, PlusCircle, Paperclip, AlertTriangle, Lightbulb, X } from 'lucide-react';
+import { Send, Loader2, Wand2, PlusCircle, UploadCloud, X, FileText, Lightbulb } from 'lucide-react';
 
 interface Props {
   userEmail: string;
@@ -26,8 +25,11 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  
+  // File State
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [suggestedPriority, setSuggestedPriority] = useState<Priority | null>(null);
@@ -79,9 +81,11 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
     setIsAnalyzing(false);
   };
 
+  // --- FILE HANDLERS ---
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setSelectedFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
+      const newFiles = Array.from(e.target.files);
+      setSelectedFiles(prev => [...prev, ...newFiles]);
     }
   };
 
@@ -102,12 +106,14 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    setTimeout(() => {
-      submitTicket(userEmail, {
+    setUploadProgress('');
+
+    try {
+      // 1. Submit the Ticket Data
+      const ticketId = await submitTicket(userEmail, {
         campusId,
         buildingId,
         locationId,
@@ -116,11 +122,28 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
         title,
         description,
         priority: suggestedPriority || Priority.MEDIUM,
-        files: selectedFiles
       });
-      setIsSubmitting(false);
+
+      // 2. Upload Files if ticket created successfully
+      if (ticketId && selectedFiles.length > 0) {
+        setUploadProgress(`Uploading ${selectedFiles.length} file(s)...`);
+        
+        // Upload sequentially to avoid overwhelming server or rate limits
+        for (let i = 0; i < selectedFiles.length; i++) {
+          const file = selectedFiles[i];
+          setUploadProgress(`Uploading ${i + 1}/${selectedFiles.length}: ${file.name}`);
+          await uploadFile(file, ticketId);
+        }
+      }
+
       onSuccess();
-    }, 1200);
+    } catch (error) {
+      console.error("Submission failed", error);
+      alert("Failed to submit ticket. Please check your connection.");
+    } finally {
+      setIsSubmitting(false);
+      setUploadProgress('');
+    }
   };
 
   return (
@@ -312,27 +335,35 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
             )}
           </div>
 
-          {/* File Upload */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Attachments (Photos/Docs)</label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center bg-gray-50 hover:bg-gray-100 transition-colors relative">
+          {/* File Upload Section */}
+          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+              <UploadCloud className="w-4 h-4" /> Attachments
+            </label>
+            
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center bg-white hover:bg-gray-50 transition-colors relative">
               <input 
                 type="file" 
                 multiple
                 onChange={handleFileChange}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
-              <Paperclip className="w-8 h-8 text-gray-400 mb-2" />
-              <p className="text-sm text-gray-500">Click or drag files here to upload</p>
+              <UploadCloud className="w-10 h-10 text-gray-400 mb-2" />
+              <p className="text-sm font-medium text-gray-600">Click or Drag files here</p>
+              <p className="text-xs text-gray-400">Support images, PDFs, Docs</p>
             </div>
-            
-            {/* File List */}
+
+            {/* Selected File List */}
             {selectedFiles.length > 0 && (
-              <div className="mt-3 space-y-2">
+              <div className="mt-4 space-y-2">
                 {selectedFiles.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between bg-white border border-gray-200 p-2 rounded text-sm">
-                    <span className="truncate max-w-xs">{file.name}</span>
-                    <button type="button" onClick={() => removeFile(index)} className="text-red-500 hover:text-red-700">
+                  <div key={index} className="flex items-center justify-between bg-white border border-gray-200 px-3 py-2 rounded text-sm shadow-sm">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <FileText className="w-4 h-4 text-gray-500 shrink-0" />
+                      <span className="truncate max-w-xs">{file.name}</span>
+                      <span className="text-xs text-gray-400">({(file.size / 1024).toFixed(0)}kb)</span>
+                    </div>
+                    <button type="button" onClick={() => removeFile(index)} className="text-red-400 hover:text-red-600">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -345,10 +376,10 @@ const TicketForm: React.FC<Props> = ({ userEmail, onSuccess }) => {
         <button 
           type="submit"
           disabled={isSubmitting}
-          className="w-full bg-[#355E3B] text-white py-4 rounded-xl font-bold text-lg hover:bg-[#2a4b2f] transition-all shadow-lg hover:shadow-xl flex justify-center items-center gap-2"
+          className="w-full bg-[#355E3B] text-white py-4 rounded-xl font-bold text-lg hover:bg-[#2a4b2f] transition-all shadow-lg hover:shadow-xl flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
         >
           {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
-          Submit Ticket
+          {isSubmitting ? (uploadProgress || 'Submitting...') : 'Submit Ticket'}
         </button>
 
       </form>

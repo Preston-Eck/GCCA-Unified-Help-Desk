@@ -1,7 +1,5 @@
-
-
-import React, { useState } from 'react';
-import { USERS_DB, validateUser, getAppConfig, hasPermission } from './services/dataService';
+import React, { useState, useEffect } from 'react';
+import { validateUser, getAppConfig, hasPermission, loadDatabase, getUsers } from './services/dataService';
 import TicketForm from './components/TicketForm';
 import TicketDashboard from './components/TicketDashboard';
 import AdminPanel from './components/AdminPanel';
@@ -13,12 +11,36 @@ import AccountRequest from './components/AccountRequest';
 import RoleManager from './components/RoleManager';
 import OperationsDashboard from './components/OperationsDashboard';
 import { AccessDenied } from './components/AccessDenied';
-import { LayoutDashboard, PlusCircle, Settings, Database, Users, Briefcase, ExternalLink, Shield, Clock } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Settings, Database, Users, Briefcase, ExternalLink, Shield, Clock, Loader2 } from 'lucide-react';
 
 export default function App() {
-  const [currentUserEmail, setCurrentUserEmail] = useState(USERS_DB[0].Email);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
   const [currentView, setCurrentView] = useState<'form' | 'dashboard' | 'admin' | 'assets' | 'users' | 'vendors' | 'portal' | 'request-account' | 'roles' | 'operations'>('dashboard');
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Initial Data Load
+  useEffect(() => {
+    const initApp = async () => {
+      await loadDatabase();
+      const users = getUsers();
+      if (users.length > 0) {
+        setCurrentUserEmail(users[0].Email);
+      }
+      setIsDataLoaded(true);
+    };
+    initApp();
+  }, []);
+
+  // Show loading screen while fetching data from Google Apps Script
+  if (!isDataLoaded) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+        <Loader2 className="w-10 h-10 text-[#355E3B] animate-spin mb-4" />
+        <h2 className="text-xl font-bold text-gray-700">Loading Help Desk...</h2>
+      </div>
+    );
+  }
 
   // If in portal mode, we skip standard user auth for the view rendering, but we still need app shell
   const isPortalMode = currentView === 'portal';
@@ -97,7 +119,7 @@ export default function App() {
                     }}
                     className="bg-[#2a4b2f] border border-green-800 text-sm rounded px-2 py-1 text-white focus:outline-none max-w-[150px] truncate"
                   >
-                    {USERS_DB.map(u => (
+                    {getUsers().map(u => (
                       <option key={u.UserID} value={u.Email}>
                         {u.Name} ({u.User_Type})
                       </option>
