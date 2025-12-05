@@ -1,160 +1,107 @@
-import { GoogleGenAI } from "@google/genai";
+
 import { Priority } from "../types";
 
-// Initialize Gemini Client
-// In a real app, strict handling of process.env.API_KEY is required.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Helper to access the backend bridge (assumes dataService exports a helper, or we use google.script.run directly)
+// Since we can't easily import `runServer` if it's not exported, we'll re-implement a minimal bridge here
+// or rely on the global google object.
+
+const callServerAI = (prompt: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    // @ts-ignore
+    if (typeof google === 'undefined' || !window.google || !window.google.script) {
+      console.warn("AI Mock Mode: Backend not found");
+      resolve("AI response unavailable in local mode.");
+      return;
+    }
+    // @ts-ignore
+    window.google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject)
+      .callGemini(prompt);
+  });
+};
 
 export const analyzeTicketPriority = async (description: string, department: string): Promise<Priority> => {
-  if (!process.env.API_KEY) {
-    console.warn("No API Key found. Returning default priority.");
-    return Priority.MEDIUM;
-  }
-
   try {
-    const model = 'gemini-2.5-flash';
     const prompt = `
-      You are an automated help desk triage assistant for a school.
-      Analyze the following ticket description for the ${department} department.
-      Determine the priority level based on urgency and impact.
-      
+      You are an automated help desk triage assistant.
+      Analyze this ${department} ticket description.
+      Determine priority: "Low", "Medium", "High", or "Critical".
+      Return ONLY the word.
       Description: "${description}"
-      
-      Return ONLY one of the following words: "Low", "Medium", "High", "Critical".
-      Do not add any explanation or punctuation.
     `;
 
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-    });
+    const text = await callServerAI(prompt);
+    const cleaned = text.trim().replace(/['"]/g, '');
 
-    const text = response.text?.trim();
-
-    switch (text) {
+    switch (cleaned) {
       case 'Low': return Priority.LOW;
       case 'High': return Priority.HIGH;
       case 'Critical': return Priority.CRITICAL;
       default: return Priority.MEDIUM;
     }
   } catch (error) {
-    console.error("Gemini triage failed:", error);
+    console.error("AI Triage Failed:", error);
     return Priority.MEDIUM;
   }
 };
 
 export const refineTicketDescription = async (rawText: string, department: string): Promise<string> => {
-  if (!process.env.API_KEY || !rawText) return rawText;
-
   try {
-    const model = 'gemini-2.5-flash';
     const prompt = `
-      You are a helpful IT and Facilities support assistant.
-      The user has submitted a raw description for a ${department} ticket: "${rawText}".
-      
-      Please rewrite this to be clearer, more professional, and concise. 
-      If vague, ask a clarifying question in parenthesis.
-      Example Input: "internet bad" -> Output: "Internet connectivity is intermittent/slow. (Is this wired or wifi?)"
-      
+      Rewrite this ${department} ticket description to be professional, concise, and clear.
+      If vague, add a clarifying question in parenthesis.
+      Input: "${rawText}"
       Return ONLY the rewritten text.
     `;
-
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-    });
-
-    return response.text?.trim() || rawText;
+    return await callServerAI(prompt);
   } catch (error) {
-    console.error("Gemini refinement failed:", error);
     return rawText;
   }
 };
 
 export const findPotentialDuplicates = async (newDescription: string, existingTickets: {id: string, text: string}[]): Promise<string[]> => {
-  if (!process.env.API_KEY || !newDescription || existingTickets.length === 0) return [];
-
   try {
-    // We send a batch to Gemini to check for semantic similarity
-    // In a real high-volume app, vector embeddings (Vector Search) would be better.
-    // For this list (usually < 50 open tickets), prompt engineering works fine.
-    
+    if(existingTickets.length === 0) return [];
     const context = existingTickets.map(t => `ID: ${t.id} | Desc: ${t.text}`).join('\n');
-    
-    const model = 'gemini-2.5-flash';
     const prompt = `
-      You are a help desk duplication detector.
-      New Ticket Description: "${newDescription}"
-      
-      Compare it against these existing open tickets:
+      Check for duplicates.
+      New Ticket: "${newDescription}"
+      Existing:
       ${context}
-      
-      Identify any tickets that seem to be about the EXACT SAME specific issue (location, device, problem).
-      Return ONLY a JSON array of Ticket IDs. If none, return [].
+      Return a JSON array of matching Ticket IDs. Return [] if none.
     `;
-
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-    });
-
-    const text = response.text?.trim() || '[]';
-    // Clean up markdown code blocks if present
-    const cleanJson = text.replace(/```json/g, '').replace(/```/g, '');
-    return JSON.parse(cleanJson);
+    const text = await callServerAI(prompt);
+    // Clean code blocks if AI adds them
+    const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(jsonStr);
   } catch (error) {
-    console.error("Gemini duplication check failed:", error);
     return [];
   }
 };
 
 export const generateMaintenanceSchedule = async (assetName: string, modelNumber: string): Promise<Array<{task: string, frequency: string}>> => {
-  if (!process.env.API_KEY) return [];
-
   try {
-    const model = 'gemini-2.5-flash';
     const prompt = `
-      I have an asset: "${assetName}" (Model: ${modelNumber || 'Unknown'}).
-      Create a preventative maintenance schedule for it.
-      Return a JSON array of objects with keys: "task" (string) and "frequency" (Daily, Weekly, Monthly, Quarterly, Yearly).
-      Provide 3-5 distinct, realistic tasks.
+      Create a PM schedule for Asset: "${assetName}" (Model: ${modelNumber}).
+      Return a JSON array of objects with "task" and "frequency" (Daily, Weekly, Monthly, Quarterly, Yearly).
     `;
-
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-    });
-
-    const text = response.text?.trim() || '[]';
-    const cleanJson = text.replace(/```json/g, '').replace(/```/g, '');
-    return JSON.parse(cleanJson);
+    const text = await callServerAI(prompt);
+    const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(jsonStr);
   } catch (error) {
-    console.error("Gemini PM schedule failed:", error);
     return [];
   }
 };
 
 export const generateSOPContent = async (taskName: string, assetName: string): Promise<string> => {
-  if (!process.env.API_KEY) return "Standard Operating Procedure not available (AI Key missing).";
-
   try {
-    const model = 'gemini-2.5-flash';
     const prompt = `
-      Write a concise, step-by-step Standard Operating Procedure (SOP) for the following task:
-      Task: ${taskName}
-      Asset: ${assetName}
-      
-      Format as a clean numbered list. Keep it safe and professional.
+      Write a standard operating procedure (SOP) for task: "${taskName}" on asset: "${assetName}".
+      Format as a clean numbered list.
     `;
-
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-    });
-
-    return response.text?.trim() || "Procedure generation failed.";
+    return await callServerAI(prompt);
   } catch (error) {
-    console.error("Gemini SOP generation failed:", error);
-    return "Error generating SOP.";
+    return "Failed to generate SOP.";
   }
 };

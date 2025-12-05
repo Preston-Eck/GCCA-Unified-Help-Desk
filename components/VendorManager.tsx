@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { getVendors, updateVendorStatus, getVendorHistory, saveVendor, getTicketById, USERS_DB } from '../services/dataService';
+import { getVendors, updateVendorStatus, getVendorHistory, saveVendor, getTicketById, getUsers } from '../services/dataService';
 import { Vendor, VendorBid, Ticket } from '../types';
 import { CheckCircle, XCircle, Briefcase, Clock, Eye, X, Building2, Star, Archive, Edit, Save } from 'lucide-react';
 import TicketDetail from './TicketDetail';
@@ -82,7 +81,8 @@ const VendorManager: React.FC = () => {
   const filtered = vendors.filter(v => filter === 'All' || v.Status === filter);
 
   // Mock user for TicketDetail context (admin view)
-  const adminUser = USERS_DB.find(u => u.User_Type.includes('Admin')) || USERS_DB[0];
+  const users = getUsers();
+  const adminUser = users.find(u => u.User_Type.includes('Admin')) || users[0];
 
   return (
     <>
