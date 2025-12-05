@@ -1,30 +1,67 @@
 
+
 import React, { useState } from 'react';
-import { USERS_DB, validateUser, getAppConfig } from './services/dataService';
+import { USERS_DB, validateUser, getAppConfig, hasPermission } from './services/dataService';
 import TicketForm from './components/TicketForm';
 import TicketDashboard from './components/TicketDashboard';
 import AdminPanel from './components/AdminPanel';
 import AssetManager from './components/AssetManager';
+import UserManager from './components/UserManager';
+import VendorManager from './components/VendorManager';
+import VendorPortal from './components/VendorPortal';
+import AccountRequest from './components/AccountRequest';
+import RoleManager from './components/RoleManager';
+import OperationsDashboard from './components/OperationsDashboard';
 import { AccessDenied } from './components/AccessDenied';
-import { LayoutDashboard, PlusCircle, Settings, Database } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Settings, Database, Users, Briefcase, ExternalLink, Shield, Clock } from 'lucide-react';
 
 export default function App() {
   const [currentUserEmail, setCurrentUserEmail] = useState(USERS_DB[0].Email);
-  const [currentView, setCurrentView] = useState<'form' | 'dashboard' | 'admin' | 'assets'>('dashboard');
+  const [currentView, setCurrentView] = useState<'form' | 'dashboard' | 'admin' | 'assets' | 'users' | 'vendors' | 'portal' | 'request-account' | 'roles' | 'operations'>('dashboard');
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // If in portal mode, we skip standard user auth for the view rendering, but we still need app shell
+  const isPortalMode = currentView === 'portal';
+  const isRequestMode = currentView === 'request-account';
+  
   const currentUser = validateUser(currentUserEmail);
   const config = getAppConfig();
 
-  if (!currentUser) {
+  // Public Routes
+  if (isRequestMode) {
+    return <AccountRequest onBack={() => setCurrentView('dashboard')} />;
+  }
+
+  if (!currentUser && !isPortalMode) {
     return <AccessDenied />;
   }
 
   const handleRefresh = () => setRefreshKey(prev => prev + 1);
-  const isAdmin = currentUser.User_Type.includes('Admin');
-  const isChair = currentUser.User_Type.includes('Chair');
-  const isApprover = currentUser.User_Type.includes('Approver');
-  const canManageAssets = isAdmin || isChair || isApprover;
+  
+  // PERMISSION CHECKS
+  // Safely handle null user if in portal mode (though portal has its own return)
+  const user = currentUser!;
+  
+  const canSubmit = user ? hasPermission(user, 'SUBMIT_TICKETS') : false;
+  const canManageAssets = user ? hasPermission(user, 'MANAGE_ASSETS') : false;
+  const canManageUsers = user ? hasPermission(user, 'MANAGE_USERS') : false;
+  const canManageVendors = user ? hasPermission(user, 'MANAGE_VENDORS') : false;
+  const canManageRoles = user ? hasPermission(user, 'MANAGE_ROLES') : false;
+  const canManageSettings = user ? hasPermission(user, 'MANAGE_SETTINGS') : false;
+  const canViewOperations = user ? (hasPermission(user, 'MANAGE_SOPS') || hasPermission(user, 'MANAGE_SCHEDULES')) : false;
+  const isParent = user?.User_Type.includes('Parent');
+
+  if (isPortalMode) {
+     return (
+       <div className="min-h-screen bg-gray-100 font-sans">
+         <div className="bg-[#355E3B] h-2"></div>
+         <button onClick={() => setCurrentView('dashboard')} className="absolute top-4 left-4 text-sm text-gray-500 hover:text-[#355E3B]">
+           &larr; Back to Internal App
+         </button>
+         <VendorPortal />
+       </div>
+     )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-900">
@@ -42,6 +79,13 @@ export default function App() {
             </div>
             
             <div className="flex items-center gap-4">
+               {/* Sim Link for Portal */}
+               {!isParent && (
+                 <button onClick={() => setCurrentView('portal')} className="text-xs text-green-200 hover:text-white flex items-center gap-1">
+                   <ExternalLink className="w-3 h-3" /> Vendor Portal
+                 </button>
+               )}
+
               <div className="hidden md:flex items-center gap-2">
                  <span className="text-xs text-green-200">Simulate:</span>
                  <select 
@@ -82,17 +126,19 @@ export default function App() {
             Dashboard
           </button>
           
-          <button
-            onClick={() => setCurrentView('form')}
-            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all shadow-sm ${
-              currentView === 'form'
-                ? 'bg-white text-[#355E3B] ring-2 ring-[#355E3B]'
-                : 'bg-white text-gray-500 hover:text-[#355E3B] hover:bg-gray-50'
-            }`}
-          >
-            <PlusCircle className="w-5 h-5" />
-            New Ticket
-          </button>
+          {canSubmit && (
+            <button
+              onClick={() => setCurrentView('form')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all shadow-sm ${
+                currentView === 'form'
+                  ? 'bg-white text-[#355E3B] ring-2 ring-[#355E3B]'
+                  : 'bg-white text-gray-500 hover:text-[#355E3B] hover:bg-gray-50'
+              }`}
+            >
+              <PlusCircle className="w-5 h-5" />
+              New Ticket
+            </button>
+          )}
 
           {canManageAssets && (
              <button
@@ -108,7 +154,63 @@ export default function App() {
             </button>
           )}
 
-          {isAdmin && (
+          {canViewOperations && (
+             <button
+              onClick={() => setCurrentView('operations')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all shadow-sm ${
+                currentView === 'operations'
+                  ? 'bg-white text-[#355E3B] ring-2 ring-[#355E3B]'
+                  : 'bg-white text-gray-500 hover:text-[#355E3B] hover:bg-gray-50'
+              }`}
+            >
+              <Clock className="w-5 h-5" />
+              Operations
+            </button>
+          )}
+
+          {canManageUsers && (
+             <button
+              onClick={() => setCurrentView('users')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all shadow-sm ${
+                currentView === 'users'
+                  ? 'bg-white text-[#355E3B] ring-2 ring-[#355E3B]'
+                  : 'bg-white text-gray-500 hover:text-[#355E3B] hover:bg-gray-50'
+              }`}
+            >
+              <Users className="w-5 h-5" />
+              Users
+            </button>
+          )}
+
+          {canManageRoles && (
+             <button
+              onClick={() => setCurrentView('roles')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all shadow-sm ${
+                currentView === 'roles'
+                  ? 'bg-white text-[#355E3B] ring-2 ring-[#355E3B]'
+                  : 'bg-white text-gray-500 hover:text-[#355E3B] hover:bg-gray-50'
+              }`}
+            >
+              <Shield className="w-5 h-5" />
+              Roles
+            </button>
+          )}
+          
+          {canManageVendors && (
+             <button
+              onClick={() => setCurrentView('vendors')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all shadow-sm ${
+                currentView === 'vendors'
+                  ? 'bg-white text-[#355E3B] ring-2 ring-[#355E3B]'
+                  : 'bg-white text-gray-500 hover:text-[#355E3B] hover:bg-gray-50'
+              }`}
+            >
+              <Briefcase className="w-5 h-5" />
+              Vendors
+            </button>
+          )}
+
+          {canManageSettings && (
             <button
               onClick={() => setCurrentView('admin')}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all shadow-sm ${
@@ -124,9 +226,9 @@ export default function App() {
         </div>
 
         <div className="animate-in fade-in duration-300">
-          {currentView === 'form' && (
+          {currentView === 'form' && canSubmit && (
             <TicketForm 
-              userEmail={currentUser.Email} 
+              userEmail={user.Email} 
               onSuccess={() => {
                 handleRefresh();
                 setCurrentView('dashboard');
@@ -136,17 +238,33 @@ export default function App() {
 
           {currentView === 'dashboard' && (
             <TicketDashboard 
-              user={currentUser} 
+              user={user} 
               refreshKey={refreshKey}
               onRefresh={handleRefresh}
             />
           )}
 
           {currentView === 'assets' && canManageAssets && (
-            <AssetManager user={currentUser} />
+            <AssetManager user={user} />
           )}
 
-          {currentView === 'admin' && isAdmin && (
+          {currentView === 'operations' && canViewOperations && (
+            <OperationsDashboard user={user} />
+          )}
+
+          {currentView === 'users' && canManageUsers && (
+            <UserManager currentUser={user} />
+          )}
+
+          {currentView === 'vendors' && canManageVendors && (
+            <VendorManager />
+          )}
+          
+          {currentView === 'roles' && canManageRoles && (
+            <RoleManager />
+          )}
+
+          {currentView === 'admin' && canManageSettings && (
              <AdminPanel onSuccess={handleRefresh} />
           )}
         </div>

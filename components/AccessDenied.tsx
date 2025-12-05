@@ -1,10 +1,16 @@
 
-import React from 'react';
-import { Lock } from 'lucide-react';
+import React, { useState } from 'react';
+import { Lock, UserPlus } from 'lucide-react';
 import { getAppConfig } from '../services/dataService';
+import AccountRequest from './AccountRequest';
 
 export const AccessDenied: React.FC = () => {
   const config = getAppConfig();
+  const [showRequest, setShowRequest] = useState(false);
+
+  if (showRequest) {
+    return <AccountRequest onBack={() => setShowRequest(false)} />;
+  }
   
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -16,6 +22,14 @@ export const AccessDenied: React.FC = () => {
         <p className="text-gray-600 mb-6">
           {config.unauthorizedMessage}
         </p>
+        
+        <button 
+          onClick={() => setShowRequest(true)}
+          className="w-full flex items-center justify-center gap-2 bg-[#FFD700] text-gray-900 font-bold py-2 rounded mb-6 hover:bg-yellow-400"
+        >
+          <UserPlus className="w-5 h-5" /> Request Access
+        </button>
+
         <div className="text-sm text-gray-400">
           Contact: {config.supportContact}
         </div>
