@@ -249,8 +249,13 @@ function requestOtp(email) {
   
   // 1. Check if user exists in our system first
   const data = getDatabaseData();
-  const users = data.USERS || [];
-  const userExists = users.some(function(u) { return String(u.Email).toLowerCase() === email; });
+  // Handle case keys if they differ (USERS vs Users)
+  const users = data.USERS || data.Users || [];
+  
+  // Case insensitive search
+  const userExists = users.some(function(u) { 
+    return String(u.Email).trim().toLowerCase() === email; 
+  });
   
   if (!userExists) {
     return { success: false, message: "Email not found in authorized users list." };
@@ -260,7 +265,6 @@ function requestOtp(email) {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   
   // 3. Store in Cache for 10 minutes
-  // We use the script cache so it persists across calls
   const cache = CacheService.getScriptCache();
   cache.put("OTP_" + email, code, 600); // 600 seconds
   
@@ -268,13 +272,16 @@ function requestOtp(email) {
   try {
     MailApp.sendEmail({
       to: email,
-      subject: "GCCA Help Desk - Login Verification Code",
+      subject: "GCCA Facilities - Login Verification",
       htmlBody: `
-        <h2>Login Verification</h2>
-        <p>Your login code is:</p>
-        <h1 style="color: #355E3B; font-size: 32px; letter-spacing: 5px;">${code}</h1>
-        <p>This code expires in 10 minutes.</p>
-        <p>If you did not request this, please ignore this email.</p>
+        <div style="font-family: sans-serif; padding: 20px; color: #333;">
+          <h2 style="color: #355E3B;">Login Verification</h2>
+          <p>Use the code below to log in to the Facilities Dashboard:</p>
+          <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; display: inline-block;">
+            <h1 style="color: #355E3B; font-size: 32px; letter-spacing: 5px; margin: 0;">${code}</h1>
+          </div>
+          <p>This code expires in 10 minutes.</p>
+        </div>
       `
     });
     return { success: true };
