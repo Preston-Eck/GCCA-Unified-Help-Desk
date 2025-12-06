@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User } from './types';
 import { getSessionUserEmail } from './services/api';
 import { initDatabase, getUsers } from './services/dataService';
-import { Loader2, Users, Shield, Database, Briefcase, Settings, FileText, Calendar } from 'lucide-react';
+import { Loader2, Users, Shield, Database, Briefcase, Settings, FileText, Calendar, AlertTriangle, Globe } from 'lucide-react';
 
 // Components
 import TicketForm from './components/TicketForm';
@@ -23,6 +23,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [realUserEmail, setRealUserEmail] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null); // New State
   const [view, setView] = useState('dashboard');
   const [refreshKey, setRefreshKey] = useState(0);
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -33,17 +34,24 @@ export default function App() {
       try {
         // 1. Get Email First
         const email = await getSessionUserEmail();
-        if (!email) throw new Error("No email detected.");
+        
+        // DETECT BROWSER BLOCKING
+        if (!email || email === '') {
+          setAuthError("BROWSER_BLOCK");
+          setLoading(false);
+          return;
+        }
+
         setRealUserEmail(email);
 
-        // 2. WAIT for Database to Load (This is the critical fix)
+        // 2. WAIT for Database to Load
         await initDatabase();
         
-        // 3. NOW get the users (they will be populated now)
+        // 3. NOW get the users
         const users = getUsers(); 
         setAllUsers(users);
 
-        // 4. Check match
+        // 4. Check match (Case Insensitive)
         const foundUser = users.find((u: User) => u.Email.toLowerCase() === email.toLowerCase());
         
         if (foundUser) {
@@ -63,17 +71,14 @@ export default function App() {
   // 2. SUPER ADMIN MASQUERADE FUNCTION
   const handleRoleSwitch = (targetEmail: string) => {
     if (targetEmail === 'REAL_USER') {
-       // Reset to self
        const me = allUsers.find(u => u.Email.toLowerCase() === realUserEmail.toLowerCase());
        if (me) setCurrentUser(me);
     } else {
-       // Switch to other
        const targetUser = allUsers.find(u => u.Email === targetEmail);
        if (targetUser) setCurrentUser(targetUser);
     }
   };
 
-  // Helper for Permissions
   const hasPermission = (permFragment: string) => {
     if (!currentUser) return false;
     return currentUser.User_Type.includes('Admin') || 
@@ -93,12 +98,41 @@ export default function App() {
     );
   }
 
-  // 4. RENDER ACCESS DENIED
+  // 4. RENDER BROWSER ERROR (The Fix)
+  if (authError === "BROWSER_BLOCK") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+        <div className="bg-white p-8 rounded-lg shadow-xl max-w-lg w-full border-l-4 border-amber-500">
+          <div className="flex items-center gap-3 mb-4">
+            <AlertTriangle className="w-8 h-8 text-amber-500" />
+            <h1 className="text-2xl font-bold text-gray-800">Browser Setting Issue</h1>
+          </div>
+          <p className="text-gray-600 mb-4">
+            Google cannot detect your account email. This usually happens because your browser is <strong>blocking third-party cookies</strong>.
+          </p>
+          <div className="bg-amber-50 p-4 rounded text-sm text-amber-900 mb-6">
+            <strong>To fix this:</strong>
+            <ul className="list-disc list-inside mt-2 space-y-1">
+              <li>If using <strong>Safari</strong> or <strong>Brave</strong>: Disable "Prevent Cross-Site Tracking" or "Shields" for this page.</li>
+              <li>If using <strong>Chrome Incognito</strong>: Allow third-party cookies.</li>
+              <li>Try opening this page in a standard Chrome window.</li>
+              <li>Ensure you are not logged into multiple Google accounts simultaneously.</li>
+            </ul>
+          </div>
+          <button onClick={() => window.location.reload()} className="w-full bg-[#355E3B] text-white font-bold py-3 rounded hover:bg-green-800">
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. RENDER ACCESS DENIED
   if (!currentUser) {
     return <AccessDenied userEmail={realUserEmail} />;
   }
 
-  // 5. RENDER MAIN APP
+  // 6. RENDER MAIN APP
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col font-sans">
       {/* HEADER */}
@@ -110,7 +144,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* SUPER ADMIN DROPDOWN */}
             {realUserEmail.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() && (
               <div className="bg-yellow-500/20 p-1 rounded border border-yellow-500/50 flex items-center gap-2">
                 <Users className="w-4 h-4 text-yellow-200" />
@@ -141,8 +174,6 @@ export default function App() {
 
       {/* BODY CONTENT */}
       <main className="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
-        
-        {/* NAVIGATION TABS */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
            <button onClick={() => setView('dashboard')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'dashboard' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
              Dashboard
@@ -191,7 +222,6 @@ export default function App() {
            )}
         </div>
 
-        {/* VIEW ROUTING */}
         <div className="animate-in fade-in duration-300">
           {view === 'dashboard' && <TicketDashboard user={currentUser} refreshKey={refreshKey} onRefresh={() => setRefreshKey(k => k + 1)} />}
           {view === 'form' && <TicketForm userEmail={currentUser.Email} onSuccess={() => setView('dashboard')} />}
@@ -199,7 +229,6 @@ export default function App() {
           {view === 'operations' && <OperationsDashboard user={currentUser} />}
           {view === 'users' && <UserManager currentUser={currentUser} />}
           {view === 'vendors' && <VendorManager />} 
-          {/* Note: Using VendorManager for internal view, VendorPortal is for external */}
           {view === 'roles' && <RoleManager />}
           {view === 'admin' && <AdminPanel onSuccess={() => setRefreshKey(k => k + 1)} />}
         </div>
