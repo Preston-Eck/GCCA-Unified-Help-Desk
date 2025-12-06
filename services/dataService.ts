@@ -58,29 +58,51 @@ const runServer = (fnName: string, ...args: any[]): Promise<any> => {
 };
 
 // --- INITIALIZATION ---
-export const loadDatabase = async () => {
+export const initDatabase = async () => {
   try {
-    const data = await runServer('getDatabaseData');
-    if (data) {
-      DB_CACHE.users = data.users || [];
-      DB_CACHE.campuses = data.campuses || [];
-      DB_CACHE.buildings = data.buildings || [];
-      DB_CACHE.locations = data.locations || [];
-      DB_CACHE.assets = data.assets || [];
-      DB_CACHE.sops = data.sops || [];
-      DB_CACHE.tickets = data.tickets || [];
-      DB_CACHE.roles = data.roles || [];
-      DB_CACHE.config = data.config || DB_CACHE.config;
-      DB_CACHE.schedules = data.schedules || [];
-      DB_CACHE.vendors = data.vendors || [];
-      DB_CACHE.bids = data.bids || [];
-      DB_CACHE.reviews = data.reviews || [];
-      DB_CACHE.accountRequests = data.accountRequests || [];
-      DB_CACHE.assetSopLinks = data.assetSopLinks || [];
+    const u = await runServer("getDatabaseData");
+    if (u) {
+      // 1. Core Infrastructure
+      B.campuses = u.CAMPUSES || u.Campuses || [];
+      B.buildings = u.BUILDINGS || u.Buildings || [];
+      B.locations = u.LOCATIONS || u.Locations || [];
+      B.assets = u.ASSETS || u.Assets || [];
+
+      // 2. People & Roles
+      B.users = u.USERS || u.Users || [];
+      B.roles = u.ROLES || u.Roles || [];
+      B.accountRequests = u.REQUESTS || u.Account_Requests || [];
+
+      // 3. Workflows
+      B.tickets = u.TICKETS || u.Tickets || [];
+      B.ticketAttachments = u.ATTACHMENTS || u.Ticket_Attachments || [];
+      
+      // 4. Operations & Maintenance
+      B.sops = u.SOP || u.SOP_Library || [];
+      B.schedules = u.SCHEDULES || u.PM_Schedules || [];
+      B.assetSopLinks = u.ASSET_SOP || u.Asset_SOP_Link || [];
+
+      // 5. Vendor Management
+      B.vendors = u.VENDORS || u.Vendors || [];
+      B.bids = u.BIDS || u.Bids || [];
+      B.reviews = u.REVIEWS || u.Reviews || [];
+
+      // 6. App Configuration
+      if (u.CONFIG) {
+        B.config = u.CONFIG;
+      }
+      
+      console.log("Database Loaded:", {
+        Users: B.users.length,
+        Tickets: B.tickets.length,
+        Assets: B.assets.length
+      });
+      
+      return true;
     }
-    return true;
-  } catch (error) {
-    console.error("Failed to load database:", error);
+    return false;
+  } catch (e) {
+    console.error("Failed to load database:", e);
     return false;
   }
 };

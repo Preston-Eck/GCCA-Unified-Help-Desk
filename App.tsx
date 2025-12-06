@@ -41,7 +41,8 @@ export default function App() {
         setRealUserEmail(email);
         
         // B. Store All Users (For Super Admin Switching)
-        const users = dbData.users || []; // Note: lowercase 'users' to match API response
+        // Check both Capitalized (from Google Sheets) and Lowercase (just in case)
+        const users = dbData.Users || dbData.users || [];
         setAllUsers(users);
         
         // C. Find "Real" User
