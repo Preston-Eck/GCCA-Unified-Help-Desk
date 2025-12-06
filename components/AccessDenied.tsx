@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { Lock, UserPlus } from 'lucide-react';
+import { Lock, UserPlus, LogOut } from 'lucide-react';
 import { getAppConfig } from '../services/dataService';
 import AccountRequest from './AccountRequest';
 
-// 1. Define Props (so it doesn't crash when App.tsx passes the email)
 interface Props {
   userEmail?: string;
 }
@@ -13,7 +12,6 @@ const AccessDenied: React.FC<Props> = ({ userEmail }) => {
   const [showRequest, setShowRequest] = useState(false);
 
   if (showRequest) {
-    // If you have an AccountRequest component, ensure it handles the onBack prop
     return <AccountRequest onBack={() => setShowRequest(false)} />;
   }
   
@@ -28,24 +26,34 @@ const AccessDenied: React.FC<Props> = ({ userEmail }) => {
           {config.unauthorizedMessage}
         </p>
 
-        {/* Display the email for clarity */}
         {userEmail && (
-          <div className="mb-6 bg-gray-50 p-2 rounded border border-gray-200 text-xs text-gray-500">
-            Logged in as: <span className="font-mono text-gray-700 font-bold">{userEmail}</span>
+          <div className="mb-6 bg-gray-50 p-3 rounded border border-gray-200 text-xs text-gray-500">
+            You are logged in as:<br/>
+            <span className="font-mono text-gray-800 font-bold text-sm">{userEmail}</span>
           </div>
         )}
         
         <button 
           onClick={() => setShowRequest(true)}
-          className="w-full flex items-center justify-center gap-2 bg-[#FFD700] text-gray-900 font-bold py-2 rounded mb-6 hover:bg-yellow-400 transition-colors"
+          className="w-full flex items-center justify-center gap-2 bg-[#FFD700] text-gray-900 font-bold py-2 rounded mb-4 hover:bg-yellow-400 transition-colors"
         >
           <UserPlus className="w-5 h-5" /> Request Access
         </button>
 
-        <div className="text-sm text-gray-400">
-          Contact: {config.supportContact}
+        {/* SIGN OUT LINK */}
+        <div className="border-t border-gray-100 pt-4 mt-4">
+             <p className="text-xs text-gray-500 mb-2">Wrong account?</p>
+             <a 
+               href="https://accounts.google.com/Logout" 
+               target="_blank" 
+               rel="noreferrer"
+               className="flex items-center justify-center gap-1 text-sm text-blue-600 hover:underline font-medium"
+             >
+               <LogOut className="w-4 h-4" /> Sign Out of Google
+             </a>
         </div>
-        <div className="text-xs text-gray-300 mt-4">
+
+        <div className="mt-6 text-xs text-gray-300">
           System: {config.appName}
         </div>
       </div>
@@ -53,16 +61,4 @@ const AccessDenied: React.FC<Props> = ({ userEmail }) => {
   );
 };
 
-// 2. THIS IS THE CRITICAL FIX (Default Export)
 export default AccessDenied;
-<div className="mt-4 pt-4 border-t border-gray-100">
-  <p className="text-xs text-gray-500 mb-2">Wrong account?</p>
-  <a 
-    href="https://accounts.google.com/Logout" 
-    target="_blank" 
-    rel="noreferrer"
-    className="text-sm text-blue-600 hover:underline"
-  >
-    Sign out of Google
-  </a>
-</div>

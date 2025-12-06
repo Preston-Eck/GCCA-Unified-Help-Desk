@@ -35,15 +35,14 @@ export default function App() {
         if (!email) throw new Error("No email detected.");
         setRealUserEmail(email);
 
-        // 2. Initialize Database (Populate the Brain)
+        // 2. WAIT for Database to Load (This is the critical fix)
         await initDatabase();
         
-        // 3. Get Users from the Brain (now populated correctly)
+        // 3. NOW get the users (they will be populated now)
         const users = getUsers(); 
         setAllUsers(users);
 
-        // 4. Find You
-        console.log("Checking access for:", email);
+        // 4. Check match
         const foundUser = users.find((u: User) => u.Email.toLowerCase() === email.toLowerCase());
         
         if (foundUser) {
