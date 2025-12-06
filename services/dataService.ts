@@ -323,3 +323,6 @@ export const hasPermission = (user: User, permission: string): boolean => {
   }
   return false;
 };
+// --- SECURE AUTH ---
+export const requestOtp = (email: string) => runServer('requestOtp', email);
+export const verifyOtp = (email: string, code: string) => runServer('verifyOtp', email, code);

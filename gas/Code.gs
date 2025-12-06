@@ -239,3 +239,59 @@ function callGemini(promptText) {
     return JSON.parse(response.getContentText()).candidates[0].content.parts[0].text;
   } catch (e) { return "AI Service Unavailable"; }
 }
+/* =========================================
+   6. SECURE AUTHENTICATION (OTP)
+   ========================================= */
+
+function requestOtp(email) {
+  // Normalize
+  email = email.trim().toLowerCase();
+  
+  // 1. Check if user exists in our system first
+  const data = getDatabaseData();
+  const users = data.USERS || [];
+  const userExists = users.some(function(u) { return String(u.Email).toLowerCase() === email; });
+  
+  if (!userExists) {
+    return { success: false, message: "Email not found in authorized users list." };
+  }
+
+  // 2. Generate 6-digit Code
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  
+  // 3. Store in Cache for 10 minutes
+  // We use the script cache so it persists across calls
+  const cache = CacheService.getScriptCache();
+  cache.put("OTP_" + email, code, 600); // 600 seconds
+  
+  // 4. Send Email
+  try {
+    MailApp.sendEmail({
+      to: email,
+      subject: "GCCA Help Desk - Login Verification Code",
+      htmlBody: `
+        <h2>Login Verification</h2>
+        <p>Your login code is:</p>
+        <h1 style="color: #355E3B; font-size: 32px; letter-spacing: 5px;">${code}</h1>
+        <p>This code expires in 10 minutes.</p>
+        <p>If you did not request this, please ignore this email.</p>
+      `
+    });
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: "Failed to send email: " + e.toString() };
+  }
+}
+
+function verifyOtp(email, code) {
+  email = email.trim().toLowerCase();
+  const cache = CacheService.getScriptCache();
+  const storedCode = cache.get("OTP_" + email);
+  
+  if (storedCode && storedCode === code.toString()) {
+    // Correct! Remove from cache to prevent reuse
+    cache.remove("OTP_" + email);
+    return true;
+  }
+  return false;
+}
