@@ -46,7 +46,7 @@ const runServer = (fnName: string, ...args: any[]): Promise<any> => {
   });
 };
 
-// --- HELPER: NORMALIZE EMAIL ---
+// --- HELPER: NORMALIZE EMAIL (Fixes Access Denied) ---
 const normEmail = (email: string) => email ? email.trim().toLowerCase() : '';
 
 // --- INITIALIZATION ---
@@ -98,7 +98,7 @@ export const getUsers = () => DB_CACHE.users;
 export const getRoles = () => DB_CACHE.roles;
 export const getAppConfig = () => DB_CACHE.config;
 export const getTicketsForUser = (user: User) => {
-    // Basic visibility filter could go here, currently returning all for dashboard filtering
+    // Return all tickets for client-side filtering (Fixes "missing tickets" on refresh)
     return DB_CACHE.tickets;
 };
 export const updateAppConfig = async (newConfig: SiteConfig) => { DB_CACHE.config = newConfig; return runServer('updateConfig', newConfig); };
@@ -129,7 +129,7 @@ export const submitTicket = async (email: string, ticketData: any) => {
     AI_Questions: ''
   };
 
-  // Optimistic Update
+  // Optimistic Update: Show it immediately
   DB_CACHE.tickets.unshift({ ...payload, Comments: [] } as Ticket);
 
   return runServer('saveTicket', payload).then(() => newTicketID);
@@ -172,7 +172,7 @@ export const saveUser = (u: User) => {
     // Normalize before saving
     const userToSave = { ...u, Email: normEmail(u.Email) };
     
-    // Update Local
+    // Update Local Cache
     const idx = DB_CACHE.users.findIndex(existing => existing.UserID === u.UserID);
     if (idx >= 0) {
         DB_CACHE.users[idx] = userToSave;
@@ -257,7 +257,10 @@ export const rejectAccountRequest = (id: string) => {
 };
 
 export const saveVendor = (v: Vendor) => {
-    // ... (similar optimistic logic can be added here)
+    // Optimistic Vendor Save
+    const idx = DB_CACHE.vendors.findIndex(ven => ven.VendorID === v.VendorID);
+    if (idx !== -1) DB_CACHE.vendors[idx] = v;
+    else DB_CACHE.vendors.push(v);
     return runServer('saveVendor', v);
 };
 export const updateVendorStatus = (id: string, status: string) => {
@@ -318,12 +321,14 @@ export const lookup = {
 };
 export const getAssetDetails = (id: string) => DB_CACHE.assets.find(a => a.AssetID === id);
 export const getAttachments = (id: string) => DB_CACHE.ticketAttachments.filter(a => a.TicketID_Ref === id);
-export const getTechnicians = () => DB_CACHE.users.filter(u => u.User_Type && u.User_Type.includes('Tech')); // CRASH FIX HERE
 
-// --- PERMISSIONS HELPER ---
+// Fix White Screen Crash: Safely check for Tech role
+export const getTechnicians = () => DB_CACHE.users.filter(u => u.User_Type && u.User_Type.includes('Tech')); 
+
+// --- PERMISSIONS HELPER (Robust) ---
 export const hasPermission = (user: User, permission: string): boolean => {
   if (!user) return false;
-  if (user.User_Type.includes('Admin') || user.User_Type.includes('Chair')) return true;
+  if (user.User_Type && (user.User_Type.includes('Admin') || user.User_Type.includes('Chair'))) return true;
   
   // Safe split for empty roles
   const userRoles = user.User_Type ? user.User_Type.split(',').map(r => r.trim()) : [];
