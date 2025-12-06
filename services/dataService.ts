@@ -136,6 +136,14 @@ export const rejectAccountRequest = (id) => runServer('deleteAccountRequest', id
 export const saveRole = (r) => runServer('saveRole', r);
 export const deleteRole = (n) => runServer('deleteRole', n);
 export const saveVendor = (v) => runServer('saveVendor', v);
+export const updateVendorStatus = (id: string, status: string) => {
+  // 1. Update Local Cache immediately so the UI reflects the change
+  const vendor = DB_CACHE.vendors.find(v => v.VendorID === id);
+  if (vendor) vendor.Status = status as any;
+  
+  // 2. Send update to Server
+  return runServer('saveVendor', { VendorID: id, Status: status });
+};
 export const registerVendor = (v) => runServer('saveVendor', v);
 export const submitBid = (v, t, a, n, f) => runServer('submitBid', { BidID: `BID-${Date.now()}`, VendorID_Ref: v, TicketID_Ref: t, Amount: a, Notes: n, Status: 'Pending', DateSubmitted: new Date().toISOString() });
 export const acceptBid = (b, t) => runServer('updateBid', { BidID: b, Status: 'Accepted' });

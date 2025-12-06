@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, AccountRequest, RoleDefinition } from '../types';
-import { getUsers, saveUser, deleteUser, getAccountRequests, approveAccountRequest, rejectAccountRequest, getRoles } from '../services/dataService';
+import { getUsers, saveUser, deleteUser, getAccountRequests, rejectAccountRequest, getRoles } from '../services/dataService';
 import { Users, Plus, Edit2, Trash2, Save, X, Shield, UserPlus, Check, XCircle } from 'lucide-react';
 
 interface Props {
