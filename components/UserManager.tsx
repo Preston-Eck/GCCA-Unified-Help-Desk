@@ -3,6 +3,38 @@ import { User, AccountRequest, RoleDefinition } from '../types';
 import { getUsers, saveUser, deleteUser, getAccountRequests, rejectAccountRequest, getRoles } from '../services/dataService';
 import { Users, Plus, Edit2, Trash2, Save, X, Shield, Check, XCircle } from 'lucide-react';
 
+// Helper for Multi-Select Checkboxes
+const MultiSelect = ({ options, value, onChange, label }) => {
+  const selected = value ? value.split(',').map(s => s.trim()) : [];
+  
+  const toggle = (opt) => {
+    if (selected.includes(opt)) {
+      onChange(selected.filter(s => s !== opt).join(','));
+    } else {
+      onChange([...selected, opt].join(','));
+    }
+  };
+
+  return (
+    <div className="mb-4">
+      <label className="block text-xs font-bold text-gray-500 uppercase mb-2">{label}</label>
+      <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded border border-gray-200 max-h-32 overflow-y-auto">
+        {options.map(opt => (
+          <label key={opt} className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+            <input 
+              type="checkbox" 
+              checked={selected.includes(opt)}
+              onChange={() => toggle(opt)}
+              className="rounded text-[#355E3B] focus:ring-[#355E3B]"
+            />
+            <span className="text-sm text-gray-700">{opt}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 interface Props {
   currentUser: User;
 }
@@ -259,5 +291,19 @@ const UserManager: React.FC<Props> = ({ currentUser }) => {
     </div>
   );
 };
+// Replace the <select> for Department with:
+<MultiSelect 
+  label="Departments"
+  options={['General', 'IT', 'Facilities', 'Administration', 'Academics']}
+  value={editingUser.Department || ''}
+  onChange={val => setEditingUser({...editingUser, Department: val})}
+/>
 
+// Replace the <select> for Roles with:
+<MultiSelect 
+  label="Roles"
+  options={availableRoles.map(r => r.RoleName)}
+  value={editingUser.User_Type || ''}
+  onChange={val => setEditingUser({...editingUser, User_Type: val})}
+/>
 export default UserManager;

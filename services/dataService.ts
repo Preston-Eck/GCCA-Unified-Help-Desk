@@ -1,4 +1,4 @@
-import { Ticket, User, Campus, Building, Location, Asset, MaintenanceSchedule, SOP, TicketAttachment, Vendor, VendorBid, VendorReview, AccountRequest, RoleDefinition, Permission, SiteConfig, AssetSOPLink } from '../types';
+import { Ticket, User, Campus, Building, Location, Asset, MaintenanceSchedule, SOP, TicketAttachment, Vendor, VendorBid, VendorReview, AccountRequest, RoleDefinition, Permission, SiteConfig, AssetSOPLink, FieldMapping, AppField} from '../types';
 
 // --- LOCAL CACHE STATE ---
 const DB_CACHE = {
@@ -22,7 +22,9 @@ const DB_CACHE = {
   reviews: [] as VendorReview[],
   accountRequests: [] as AccountRequest[],
   assetSopLinks: [] as AssetSOPLink[],
-  ticketAttachments: [] as TicketAttachment[]
+  ticketAttachments: [] as TicketAttachment[],
+  mappings: [] as FieldMapping[],
+  schema: {} as Record<string, string[]>
 };
 
 // --- THE BRIDGE ---
@@ -59,6 +61,21 @@ export const initDatabase = async () => {
       DB_CACHE.buildings = u.BUILDINGS || [];
       DB_CACHE.locations = u.LOCATIONS || [];
       DB_CACHE.assets = u.ASSETS || [];
+      DB_CACHE.mappings = u.MAPPINGS || u.Data_Mapping || [];
+      // Prepopulate if empty
+       if (DB_CACHE.mappings.length === 0) {
+         console.log("No mappings found. Prepopulating defaults...");
+         await prepopulateMappings();
+       }
+       
+       return true;
+    }
+    return false;
+  } catch (e) {
+    console.error("Failed to load database:", e);
+    return false;
+  }
+};
       
       // Safe Ticket Parsing
       DB_CACHE.tickets = (u.TICKETS || []).map((t: any) => {
@@ -326,3 +343,69 @@ export const hasPermission = (user: User, permission: string): boolean => {
 // --- SECURE AUTH ---
 export const requestOtp = (email: string) => runServer('requestOtp', email);
 export const verifyOtp = (email: string, code: string) => runServer('verifyOtp', email, code);
+
+// --- SCHEMA & MAPPING ---
+
+// 1. Fetch live headers from Spreadsheet
+export const fetchSchema = async () => {
+  const schema = await runServer('getSchema');
+  DB_CACHE.schema = schema;
+  return schema;
+};
+
+// 2. Define Known App Fields (The "User Inputs")
+export const APP_FIELDS: AppField[] = [
+  { id: 'ticket.title', label: 'Ticket Title', description: 'Main subject of the ticket', type: 'text' },
+  { id: 'ticket.description', label: 'Ticket Description', description: 'Detailed issue report', type: 'text' },
+  { id: 'ticket.submitter', label: 'Submitter Email', description: 'Email of person reporting', type: 'text' },
+  { id: 'ticket.status', label: 'Status', description: 'Current workflow state', type: 'select' },
+  { id: 'ticket.priority', label: 'Priority', description: 'Urgency level', type: 'select' },
+  { id: 'ticket.category', label: 'Category', description: 'Department category (IT/Facilities)', type: 'select' },
+  { id: 'user.name', label: 'User Name', description: 'Full Name', type: 'text' },
+  { id: 'user.email', label: 'User Email', description: 'Login Email', type: 'text' },
+  { id: 'user.roles', label: 'User Roles', description: 'Comma-separated roles', type: 'select' },
+  { id: 'user.dept', label: 'User Department', description: 'Comma-separated departments', type: 'select' },
+  { id: 'asset.name', label: 'Asset Name', description: 'Name of the equipment', type: 'text' },
+  { id: 'asset.model', label: 'Model Number', description: 'Manufacturer model', type: 'text' },
+];
+
+export const getMappings = () => DB_CACHE.mappings;
+
+export const saveFieldMapping = async (mapping: FieldMapping) => {
+  const newMapping = { ...mapping, MappingID: mapping.MappingID || `MAP-${Date.now()}` };
+  
+  // Optimistic update
+  const idx = DB_CACHE.mappings.findIndex(m => m.MappingID === newMapping.MappingID);
+  if (idx >= 0) DB_CACHE.mappings[idx] = newMapping;
+  else DB_CACHE.mappings.push(newMapping);
+  
+  return runServer('saveMapping', newMapping);
+};
+
+export const deleteFieldMapping = async (id: string) => {
+  DB_CACHE.mappings = DB_CACHE.mappings.filter(m => m.MappingID !== id);
+  return runServer('deleteMapping', id);
+};
+
+// 3. Prepopulation Logic
+const prepopulateMappings = async () => {
+  const defaults = [
+    { SheetName: 'Tickets', SheetHeader: 'Title', AppFieldID: 'ticket.title' },
+    { SheetName: 'Tickets', SheetHeader: 'Description', AppFieldID: 'ticket.description' },
+    { SheetName: 'Tickets', SheetHeader: 'Status', AppFieldID: 'ticket.status' },
+    { SheetName: 'Tickets', SheetHeader: 'Priority', AppFieldID: 'ticket.priority' },
+    { SheetName: 'Users', SheetHeader: 'Name', AppFieldID: 'user.name' },
+    { SheetName: 'Users', SheetHeader: 'Email', AppFieldID: 'user.email' },
+    { SheetName: 'Assets', SheetHeader: 'Asset_Name', AppFieldID: 'asset.name' },
+  ];
+
+  for (const def of defaults) {
+    await saveFieldMapping({
+      MappingID: `MAP-DEF-${Math.floor(Math.random() * 10000)}`,
+      SheetName: def.SheetName,
+      SheetHeader: def.SheetHeader,
+      AppFieldID: def.AppFieldID,
+      Description: 'Auto-generated default'
+    });
+  }
+};

@@ -20,7 +20,8 @@ const TABS = {
   REQUESTS: 'Account_Requests',
   BIDS: 'Bids',
   REVIEWS: 'Reviews',
-  ASSET_SOP: 'Asset_SOP_Link'
+  ASSET_SOP: 'Asset_SOP_Link',
+  MAPPINGS: 'Data_Mapping' // <--- NEW TAB ADDED HERE
 };
 
 /* =========================================
@@ -229,10 +230,8 @@ function callGemini(promptText) {
    ========================================= */
 
 function requestOtp(email) {
-  // Normalize
   email = email.trim().toLowerCase();
   
-  // 1. Check if user exists in our system first
   const data = getDatabaseData();
   const users = data.USERS || data.Users || [];
   
@@ -244,14 +243,10 @@ function requestOtp(email) {
     return { success: false, message: "Email not found in authorized users list." };
   }
 
-  // 2. Generate 6-digit Code
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  
-  // 3. Store in Cache for 10 minutes
   const cache = CacheService.getScriptCache();
   cache.put("OTP_" + email, code, 600);
   
-  // 4. Send Email
   try {
     MailApp.sendEmail({
       to: email,
@@ -284,3 +279,35 @@ function verifyOtp(email, code) {
   }
   return false;
 }
+
+/* =========================================
+   7. MAPPING & SCHEMA TOOLS (NEW)
+   ========================================= */
+
+// Returns an object: { "SheetName": ["Header1", "Header2"], ... }
+function getSchema() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const schema = {};
+  
+  Object.keys(TABS).forEach(key => {
+    const tabName = TABS[key];
+    const sheet = ss.getSheetByName(tabName);
+    if (sheet) {
+      // Get only the first row (headers)
+      const lastCol = sheet.getLastColumn();
+      if (lastCol > 0) {
+        const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+        schema[tabName] = headers;
+      } else {
+        schema[tabName] = [];
+      }
+    } else {
+      schema[tabName] = [];
+    }
+  });
+  
+  return schema;
+}
+
+function saveMapping(data) { return genericSave(TABS.MAPPINGS, 'MappingID', data); }
+function deleteMapping(id) { genericDelete(TABS.MAPPINGS, 'MappingID', id); }
