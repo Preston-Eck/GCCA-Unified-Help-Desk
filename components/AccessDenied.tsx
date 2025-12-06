@@ -1,14 +1,19 @@
-
 import React, { useState } from 'react';
 import { Lock, UserPlus } from 'lucide-react';
 import { getAppConfig } from '../services/dataService';
 import AccountRequest from './AccountRequest';
 
-export const AccessDenied: React.FC = () => {
+// 1. Define Props (so it doesn't crash when App.tsx passes the email)
+interface Props {
+  userEmail?: string;
+}
+
+const AccessDenied: React.FC<Props> = ({ userEmail }) => {
   const config = getAppConfig();
   const [showRequest, setShowRequest] = useState(false);
 
   if (showRequest) {
+    // If you have an AccountRequest component, ensure it handles the onBack prop
     return <AccountRequest onBack={() => setShowRequest(false)} />;
   }
   
@@ -19,13 +24,20 @@ export const AccessDenied: React.FC = () => {
           <Lock className="w-8 h-8 text-red-600" />
         </div>
         <h1 className="text-2xl font-bold text-[#355E3B] mb-2">Access Denied</h1>
-        <p className="text-gray-600 mb-6">
+        <p className="text-gray-600 mb-2">
           {config.unauthorizedMessage}
         </p>
+
+        {/* Display the email for clarity */}
+        {userEmail && (
+          <div className="mb-6 bg-gray-50 p-2 rounded border border-gray-200 text-xs text-gray-500">
+            Logged in as: <span className="font-mono text-gray-700 font-bold">{userEmail}</span>
+          </div>
+        )}
         
         <button 
           onClick={() => setShowRequest(true)}
-          className="w-full flex items-center justify-center gap-2 bg-[#FFD700] text-gray-900 font-bold py-2 rounded mb-6 hover:bg-yellow-400"
+          className="w-full flex items-center justify-center gap-2 bg-[#FFD700] text-gray-900 font-bold py-2 rounded mb-6 hover:bg-yellow-400 transition-colors"
         >
           <UserPlus className="w-5 h-5" /> Request Access
         </button>
@@ -40,3 +52,6 @@ export const AccessDenied: React.FC = () => {
     </div>
   );
 };
+
+// 2. THIS IS THE CRITICAL FIX (Default Export)
+export default AccessDenied;
