@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from './types';
-import { getDatabaseData, getSessionUserEmail } from './services/api';
+import { getSessionUserEmail } from './services/api';
+import { initDatabase, getUsers } from './services/dataService';
 import { Loader2, Users, Shield, Database, Briefcase, Settings, FileText, Calendar } from 'lucide-react';
 
 // Components
