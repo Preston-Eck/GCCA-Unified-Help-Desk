@@ -86,3 +86,14 @@ export const api = {
     return await runGAS<string>('callGemini', prompt);
   }
 };
+
+// Add this to services/api.ts
+
+export const getSessionUserEmail = async () => {
+  try {
+    return await runServer('getSessionUserEmail');
+  } catch (e) {
+    console.error("Auth Error:", e);
+    return null;
+  }
+};
