@@ -170,3 +170,30 @@ export const lookup = {
 export const getAssetDetails = (id) => DB_CACHE.assets.find(a => a.AssetID === id);
 export const getAttachments = (id) => DB_CACHE.ticketAttachments.filter(a => a.TicketID_Ref === id);
 export const getTechnicians = () => DB_CACHE.users.filter(u => u.User_Type.includes('Tech'));
+// --- PERMISSIONS HELPER ---
+export const hasPermission = (user: User, permission: string): boolean => {
+  if (!user) return false;
+
+  // 1. Super User Override
+  // Admins and Chairs automatically get all permissions
+  if (user.User_Type.includes('Admin') || user.User_Type.includes('Chair')) {
+    return true;
+  }
+
+  // 2. Check Role-Based Permissions
+  // User_Type is a comma-separated string (e.g., "Staff, Tech")
+  const userRoles = user.User_Type.split(',').map(r => r.trim());
+  
+  // Get definitions from the local cache
+  const definedRoles = getRoles(); 
+  
+  // Check if ANY of the user's roles contain the required permission
+  for (const roleName of userRoles) {
+    const roleDef = definedRoles.find(r => r.RoleName === roleName);
+    if (roleDef && roleDef.Permissions && roleDef.Permissions.includes(permission as any)) {
+      return true;
+    }
+  }
+
+  return false;
+};
