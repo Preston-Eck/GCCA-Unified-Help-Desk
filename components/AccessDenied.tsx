@@ -55,3 +55,14 @@ const AccessDenied: React.FC<Props> = ({ userEmail }) => {
 
 // 2. THIS IS THE CRITICAL FIX (Default Export)
 export default AccessDenied;
+<div className="mt-4 pt-4 border-t border-gray-100">
+  <p className="text-xs text-gray-500 mb-2">Wrong account?</p>
+  <a 
+    href="https://accounts.google.com/Logout" 
+    target="_blank" 
+    rel="noreferrer"
+    className="text-sm text-blue-600 hover:underline"
+  >
+    Sign out of Google
+  </a>
+</div>

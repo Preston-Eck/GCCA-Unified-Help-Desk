@@ -30,28 +30,26 @@ export default function App() {
   useEffect(() => {
     const init = async () => {
       try {
-        // A. Get Data & ID in parallel
-        const [dbData, email] = await Promise.all([
-          getDatabaseData(),
-          getSessionUserEmail()
-        ]);
-
-        if (!email) throw new Error("Could not verify identity.");
-        
+        // 1. Get Email First
+        const email = await getSessionUserEmail();
+        if (!email) throw new Error("No email detected.");
         setRealUserEmail(email);
+
+        // 2. Initialize Database (Populate the Brain)
+        await initDatabase();
         
-        // B. Store All Users (For Super Admin Switching)
-        // Check both Capitalized (from Google Sheets) and Lowercase (just in case)
-        const users = dbData.Users || dbData.users || [];
+        // 3. Get Users from the Brain (now populated correctly)
+        const users = getUsers(); 
         setAllUsers(users);
-        
-        // C. Find "Real" User
+
+        // 4. Find You
+        console.log("Checking access for:", email);
         const foundUser = users.find((u: User) => u.Email.toLowerCase() === email.toLowerCase());
         
         if (foundUser) {
           setCurrentUser(foundUser);
         } else {
-          console.warn("User not found in DB:", email);
+          console.warn("User match failed. DB Emails:", users.map(u => u.Email));
         }
       } catch (err) {
         console.error("Init failed:", err);
