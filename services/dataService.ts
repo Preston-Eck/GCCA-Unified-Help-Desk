@@ -1,4 +1,4 @@
-import { Ticket, User, Campus, Building, Location, Asset, MaintenanceSchedule, SOP, TicketAttachment, Vendor, VendorBid, VendorReview, AccountRequest, RoleDefinition, Permission, SiteConfig, AssetSOPLink, FieldMapping, AppField} from '../types';
+import { Ticket, User, Campus, Building, Location, Asset, MaintenanceSchedule, SOP, TicketAttachment, Vendor, VendorBid, VendorReview, AccountRequest, RoleDefinition, SiteConfig, AssetSOPLink, FieldMapping, AppField } from '../types';
 
 // --- LOCAL CACHE STATE ---
 const DB_CACHE = {
@@ -62,21 +62,7 @@ export const initDatabase = async () => {
       DB_CACHE.locations = u.LOCATIONS || [];
       DB_CACHE.assets = u.ASSETS || [];
       DB_CACHE.mappings = u.MAPPINGS || u.Data_Mapping || [];
-      // Prepopulate if empty
-       if (DB_CACHE.mappings.length === 0) {
-         console.log("No mappings found. Prepopulating defaults...");
-         await prepopulateMappings();
-       }
-       
-       return true;
-    }
-    return false;
-  } catch (e) {
-    console.error("Failed to load database:", e);
-    return false;
-  }
-};
-      
+
       // Safe Ticket Parsing
       DB_CACHE.tickets = (u.TICKETS || []).map((t: any) => {
           let comments = [];
@@ -106,6 +92,12 @@ export const initDatabase = async () => {
 
       DB_CACHE.accountRequests = u.REQUESTS || [];
       if (u.CONFIG) DB_CACHE.config = u.CONFIG;
+
+      // Prepopulate mappings if empty
+      if (DB_CACHE.mappings.length === 0) {
+         console.log("No mappings found. Prepopulating defaults...");
+         await prepopulateMappings();
+      }
       
       console.log("Database Loaded. Users found:", DB_CACHE.users.length);
       return true;
@@ -117,7 +109,7 @@ export const initDatabase = async () => {
   }
 };
 
-// --- GETTERS (Exported First to prevent missing member errors) ---
+// --- GETTERS ---
 export const getCampuses = () => DB_CACHE.campuses;
 export const getBuildings = (campusId: string) => DB_CACHE.buildings.filter(b => b.CampusID_Ref === campusId);
 export const getLocations = (buildingId: string) => DB_CACHE.locations.filter(l => l.BuildingID_Ref === buildingId);
@@ -130,7 +122,7 @@ export const getAllSOPs = () => DB_CACHE.sops;
 export const getSOPsForAsset = (id: string) => DB_CACHE.sops;
 export const getAllMaintenanceSchedules = () => DB_CACHE.schedules;
 export const getMaintenanceSchedules = (id: string) => DB_CACHE.schedules.filter(s => s.AssetID_Ref === id);
-export const getAccountRequests = () => DB_CACHE.accountRequests; // <--- This is the one the error claimed was missing
+export const getAccountRequests = () => DB_CACHE.accountRequests; 
 export const getVendors = () => DB_CACHE.vendors;
 export const getVendorHistory = (id: string) => DB_CACHE.bids.filter(b => b.VendorID_Ref === id);
 export const getOpenTicketsForVendors = () => DB_CACHE.tickets.filter(t => t.Status === 'Open for Bid');

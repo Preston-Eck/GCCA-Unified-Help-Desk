@@ -3,11 +3,17 @@ import { User, AccountRequest, RoleDefinition } from '../types';
 import { getUsers, saveUser, deleteUser, getAccountRequests, rejectAccountRequest, getRoles } from '../services/dataService';
 import { Users, Plus, Edit2, Trash2, Save, X, Shield, Check, XCircle } from 'lucide-react';
 
-// Helper for Multi-Select Checkboxes
-const MultiSelect = ({ options, value, onChange, label }) => {
+interface MultiSelectProps {
+  options: string[];
+  value: string;
+  onChange: (val: string) => void;
+  label: string;
+}
+
+const MultiSelect: React.FC<MultiSelectProps> = ({ options, value, onChange, label }) => {
   const selected = value ? value.split(',').map(s => s.trim()) : [];
   
-  const toggle = (opt) => {
+  const toggle = (opt: string) => {
     if (selected.includes(opt)) {
       onChange(selected.filter(s => s !== opt).join(','));
     } else {
@@ -85,7 +91,6 @@ const UserManager: React.FC<Props> = ({ currentUser }) => {
   };
 
   const handleApproveRequest = (req: AccountRequest) => {
-    // Open the edit modal to confirm details before creating the user
     setEditingUser({
        UserID: '',
        Name: req.Name,
@@ -93,7 +98,6 @@ const UserManager: React.FC<Props> = ({ currentUser }) => {
        User_Type: req.RequestedRole,
        Department: req.Department || 'General'
     });
-    // Reject from the request queue because we are about to add them as a real user
     rejectAccountRequest(req.RequestID); 
   }
 
@@ -244,38 +248,19 @@ const UserManager: React.FC<Props> = ({ currentUser }) => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Department</label>
-                <select 
-                   value={editingUser.Department}
-                   onChange={e => setEditingUser({...editingUser, Department: e.target.value})}
-                   className="w-full border border-gray-300 rounded p-2"
-                >
-                  <option value="General">General/Parent</option>
-                  <option value="IT">IT</option>
-                  <option value="Facilities">Facilities</option>
-                  <option value="Administration">Administration</option>
-                  <option value="Academics">Academics</option>
-                </select>
-              </div>
+              <MultiSelect 
+                label="Departments"
+                options={['General', 'IT', 'Facilities', 'Administration', 'Academics']}
+                value={editingUser.Department || ''}
+                onChange={val => setEditingUser({...editingUser, Department: val})}
+              />
 
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                  Primary Role
-                </label>
-                <select 
-                   value={editingUser.User_Type?.split(',')[0]} 
-                   onChange={e => setEditingUser({...editingUser, User_Type: e.target.value})}
-                   className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-[#355E3B]"
-                >
-                  {availableRoles.map(r => (
-                    <option key={r.RoleName} value={r.RoleName}>{r.RoleName}</option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-gray-400 mt-1">
-                  Selected from defined roles.
-                </p>
-              </div>
+              <MultiSelect 
+                label="Roles"
+                options={availableRoles.map(r => r.RoleName)}
+                value={editingUser.User_Type || ''}
+                onChange={val => setEditingUser({...editingUser, User_Type: val})}
+              />
 
               <button 
                 onClick={handleSave}
@@ -291,19 +276,5 @@ const UserManager: React.FC<Props> = ({ currentUser }) => {
     </div>
   );
 };
-// Replace the <select> for Department with:
-<MultiSelect 
-  label="Departments"
-  options={['General', 'IT', 'Facilities', 'Administration', 'Academics']}
-  value={editingUser.Department || ''}
-  onChange={val => setEditingUser({...editingUser, Department: val})}
-/>
 
-// Replace the <select> for Roles with:
-<MultiSelect 
-  label="Roles"
-  options={availableRoles.map(r => r.RoleName)}
-  value={editingUser.User_Type || ''}
-  onChange={val => setEditingUser({...editingUser, User_Type: val})}
-/>
 export default UserManager;
