@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, AccountRequest, RoleDefinition } from '../types';
 import { getUsers, saveUser, deleteUser, getAccountRequests, rejectAccountRequest, getRoles } from '../services/dataService';
-import { Users, Plus, Edit2, Trash2, Save, X, Shield, UserPlus, Check, XCircle } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, Save, X, Shield, Check, XCircle } from 'lucide-react';
 
 interface Props {
   currentUser: User;
@@ -54,7 +53,7 @@ const UserManager: React.FC<Props> = ({ currentUser }) => {
   };
 
   const handleApproveRequest = (req: AccountRequest) => {
-    // We can open the edit modal to confirm details before final save
+    // Open the edit modal to confirm details before creating the user
     setEditingUser({
        UserID: '',
        Name: req.Name,
@@ -62,7 +61,8 @@ const UserManager: React.FC<Props> = ({ currentUser }) => {
        User_Type: req.RequestedRole,
        Department: req.Department || 'General'
     });
-    rejectAccountRequest(req.RequestID); // Remove from request queue
+    // Reject from the request queue because we are about to add them as a real user
+    rejectAccountRequest(req.RequestID); 
   }
 
   const handleRejectRequest = (id: string) => {

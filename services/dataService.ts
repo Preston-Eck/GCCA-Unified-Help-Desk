@@ -46,7 +46,7 @@ const runServer = (fnName: string, ...args: any[]): Promise<any> => {
   });
 };
 
-// --- HELPER: NORMALIZE EMAIL (Fixes Access Denied) ---
+// --- HELPER: NORMALIZE EMAIL ---
 const normEmail = (email: string) => email ? email.trim().toLowerCase() : '';
 
 // --- INITIALIZATION ---
@@ -54,14 +54,25 @@ export const initDatabase = async () => {
   try {
     const u = await runServer("getDatabaseData");
     if (u) {
-      // Load and normalize Emails immediately
       DB_CACHE.users = (u.USERS || []).map((user: User) => ({ ...user, Email: normEmail(user.Email) }));
-      
       DB_CACHE.campuses = u.CAMPUSES || [];
       DB_CACHE.buildings = u.BUILDINGS || [];
       DB_CACHE.locations = u.LOCATIONS || [];
       DB_CACHE.assets = u.ASSETS || [];
-      DB_CACHE.tickets = u.TICKETS || [];
+      
+      // Safe Ticket Parsing
+      DB_CACHE.tickets = (u.TICKETS || []).map((t: any) => {
+          let comments = [];
+          try {
+              if (typeof t.Comments === 'string' && t.Comments.startsWith('[')) {
+                  comments = JSON.parse(t.Comments);
+              } else if (Array.isArray(t.Comments)) {
+                  comments = t.Comments;
+              }
+          } catch (e) { console.warn("Comment parse error", t.TicketID); }
+          return { ...t, Comments: comments };
+      });
+
       DB_CACHE.ticketAttachments = u.ATTACHMENTS || [];
       DB_CACHE.sops = u.SOP || [];
       DB_CACHE.schedules = u.SCHEDULES || [];
@@ -89,7 +100,7 @@ export const initDatabase = async () => {
   }
 };
 
-// --- EXPORTS ---
+// --- GETTERS (Exported First to prevent missing member errors) ---
 export const getCampuses = () => DB_CACHE.campuses;
 export const getBuildings = (campusId: string) => DB_CACHE.buildings.filter(b => b.CampusID_Ref === campusId);
 export const getLocations = (buildingId: string) => DB_CACHE.locations.filter(l => l.BuildingID_Ref === buildingId);
@@ -97,13 +108,34 @@ export const getAssets = (locationId: string) => DB_CACHE.assets.filter(a => a.L
 export const getUsers = () => DB_CACHE.users;
 export const getRoles = () => DB_CACHE.roles;
 export const getAppConfig = () => DB_CACHE.config;
-export const getTicketsForUser = (user: User) => {
-    // Return all tickets for client-side filtering (Fixes "missing tickets" on refresh)
-    return DB_CACHE.tickets;
-};
-export const updateAppConfig = async (newConfig: SiteConfig) => { DB_CACHE.config = newConfig; return runServer('updateConfig', newConfig); };
+export const getTicketsForUser = (user: User) => DB_CACHE.tickets;
+export const getAllSOPs = () => DB_CACHE.sops;
+export const getSOPsForAsset = (id: string) => DB_CACHE.sops;
+export const getAllMaintenanceSchedules = () => DB_CACHE.schedules;
+export const getMaintenanceSchedules = (id: string) => DB_CACHE.schedules.filter(s => s.AssetID_Ref === id);
+export const getAccountRequests = () => DB_CACHE.accountRequests; // <--- This is the one the error claimed was missing
+export const getVendors = () => DB_CACHE.vendors;
+export const getVendorHistory = (id: string) => DB_CACHE.bids.filter(b => b.VendorID_Ref === id);
+export const getOpenTicketsForVendors = () => DB_CACHE.tickets.filter(t => t.Status === 'Open for Bid');
+export const getVendorTickets = (id: string) => DB_CACHE.tickets.filter(t => t.Assigned_VendorID_Ref === id);
+export const getBidsForTicket = (id: string) => DB_CACHE.bids.filter(b => b.TicketID_Ref === id);
+export const getAttachmentsForBid = (id: string) => [];
+export const getVendorReview = (id: string) => DB_CACHE.reviews.find(r => r.TicketID_Ref === id);
+export const getTicketById = (id: string) => DB_CACHE.tickets.find(t => t.TicketID === id);
+export const getAssetDetails = (id: string) => DB_CACHE.assets.find(a => a.AssetID === id);
+export const getAttachments = (id: string) => DB_CACHE.ticketAttachments.filter(a => a.TicketID_Ref === id);
+export const getTechnicians = () => DB_CACHE.users.filter(u => u.User_Type && u.User_Type.includes('Tech')); 
 
-// --- WRITES WITH OPTIMISTIC UPDATES ---
+export const lookup = {
+  campus: (id: string) => DB_CACHE.campuses.find(c => c.CampusID === id)?.Campus_Name || id,
+  building: (id: string) => DB_CACHE.buildings.find(b => b.BuildingID === id)?.Building_Name || id,
+  location: (id: string) => DB_CACHE.locations.find(l => l.LocationID === id)?.Location_Name || id,
+  asset: (id: string) => DB_CACHE.assets.find(a => a.AssetID === id)?.Asset_Name || 'None',
+};
+
+// --- WRITES & ACTIONS ---
+
+export const updateAppConfig = async (newConfig: SiteConfig) => { DB_CACHE.config = newConfig; return runServer('updateConfig', newConfig); };
 
 export const submitTicket = async (email: string, ticketData: any) => {
   const newTicketID = `T-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -126,12 +158,11 @@ export const submitTicket = async (email: string, ticketData: any) => {
     Assigned_VendorID_Ref: '',
     IsPublic: false,
     AI_Suggested_Plan: '',
-    AI_Questions: ''
+    AI_Questions: '',
+    Comments: JSON.stringify([])
   };
 
-  // Optimistic Update: Show it immediately
   DB_CACHE.tickets.unshift({ ...payload, Comments: [] } as Ticket);
-
   return runServer('saveTicket', payload).then(() => newTicketID);
 };
 
@@ -149,19 +180,16 @@ export const uploadFile = async (file: File, ticketId: string) => {
   });
 };
 
-// --- Infrastructure Optimistic Updates ---
 export const addBuilding = (campusId: string, name: string) => {
     const newItem = { BuildingID: `BLD-${Date.now()}`, CampusID_Ref: campusId, Building_Name: name };
     DB_CACHE.buildings.push(newItem);
     return runServer('addBuilding', campusId, name);
 };
-
 export const addLocation = (buildingId: string, name: string) => {
     const newItem = { LocationID: `LOC-${Date.now()}`, BuildingID_Ref: buildingId, Location_Name: name };
     DB_CACHE.locations.push(newItem);
     return runServer('addLocation', buildingId, name);
 };
-
 export const addAsset = (locationId: string, name: string) => {
     const newItem = { AssetID: `AST-${Date.now()}`, LocationID_Ref: locationId, Asset_Name: name };
     DB_CACHE.assets.push(newItem);
@@ -169,21 +197,31 @@ export const addAsset = (locationId: string, name: string) => {
 };
 
 export const saveUser = (u: User) => {
-    // Normalize before saving
-    const userToSave = { ...u, Email: normEmail(u.Email) };
-    
-    // Update Local Cache
-    const idx = DB_CACHE.users.findIndex(existing => existing.UserID === u.UserID);
-    if (idx >= 0) {
-        DB_CACHE.users[idx] = userToSave;
-    } else {
-        const newUser = { ...userToSave, UserID: u.UserID || `U-${Date.now()}` };
-        DB_CACHE.users.push(newUser);
-    }
+    const normalizedEmail = normEmail(u.Email);
+    const finalID = u.UserID || `U-${Date.now()}`;
+    const userToSave = { ...u, UserID: finalID, Email: normalizedEmail };
+    const idx = DB_CACHE.users.findIndex(existing => existing.UserID === finalID);
+    if (idx >= 0) DB_CACHE.users[idx] = userToSave;
+    else DB_CACHE.users.push(userToSave);
     return runServer('saveUser', userToSave);
 };
 
-// --- Standard Pass-throughs & Other Optimistic Updates ---
+export const deleteUser = (id: string) => {
+    DB_CACHE.users = DB_CACHE.users.filter(u => u.UserID !== id);
+    return runServer('deleteUser', id);
+};
+
+export const saveRole = (r: RoleDefinition) => {
+    const idx = DB_CACHE.roles.findIndex(role => role.RoleName === r.RoleName);
+    if(idx !== -1) DB_CACHE.roles[idx] = r;
+    else DB_CACHE.roles.push(r);
+    return runServer('saveRole', { RoleName: r.RoleName, Description: r.Description, Permissions: r.Permissions.join(',') });
+};
+export const deleteRole = (n: string) => {
+    DB_CACHE.roles = DB_CACHE.roles.filter(r => r.RoleName !== n);
+    return runServer('deleteRole', n);
+};
+
 export const deleteBuilding = (id: string) => {
     DB_CACHE.buildings = DB_CACHE.buildings.filter(b => b.BuildingID !== id);
     return runServer('deleteBuilding', id);
@@ -201,26 +239,8 @@ export const deleteAsset = (id: string) => {
     DB_CACHE.assets = DB_CACHE.assets.filter(a => a.AssetID !== id);
     return runServer('deleteAsset', id);
 };
-
-export const saveRole = (r: RoleDefinition) => {
-    const idx = DB_CACHE.roles.findIndex(role => role.RoleName === r.RoleName);
-    if(idx !== -1) DB_CACHE.roles[idx] = r;
-    else DB_CACHE.roles.push(r);
-
-    return runServer('saveRole', { 
-        RoleName: r.RoleName, 
-        Description: r.Description, 
-        Permissions: r.Permissions.join(',') 
-    });
-};
-export const deleteRole = (n: string) => {
-    DB_CACHE.roles = DB_CACHE.roles.filter(r => r.RoleName !== n);
-    return runServer('deleteRole', n);
-};
-
 export const saveMaintenanceSchedule = (s: MaintenanceSchedule) => {
-    // Simple optimistic push (handling ID generation in real app is better)
-    DB_CACHE.schedules = DB_CACHE.schedules.filter(sch => sch.ScheduleID !== s.ScheduleID); // Remove old if update
+    DB_CACHE.schedules = DB_CACHE.schedules.filter(sch => sch.ScheduleID !== s.ScheduleID);
     DB_CACHE.schedules.push(s);
     return runServer('saveMaintenanceSchedule', s);
 };
@@ -228,7 +248,6 @@ export const deleteMaintenanceSchedule = (id: string) => {
     DB_CACHE.schedules = DB_CACHE.schedules.filter(s => s.ScheduleID !== id);
     return runServer('deleteMaintenanceSchedule', id);
 };
-
 export const addSOP = (t: string, c: string) => {
     const newSop = { SOP_ID: `SOP-${Date.now()}`, SOP_Title: t, Concise_Procedure_Text: c, Google_Doc_Link: '' };
     DB_CACHE.sops.push(newSop);
@@ -245,11 +264,6 @@ export const deleteSOP = (id: string) => {
 };
 export const linkSOPToAsset = (a: string, s: string) => runServer('linkSOP', a, s);
 
-export const deleteUser = (id: string) => {
-    DB_CACHE.users = DB_CACHE.users.filter(u => u.UserID !== id);
-    return runServer('deleteUser', id);
-};
-
 export const submitAccountRequest = (req: any) => runServer('submitAccountRequest', req);
 export const rejectAccountRequest = (id: string) => {
     DB_CACHE.accountRequests = DB_CACHE.accountRequests.filter(r => r.RequestID !== id);
@@ -257,7 +271,6 @@ export const rejectAccountRequest = (id: string) => {
 };
 
 export const saveVendor = (v: Vendor) => {
-    // Optimistic Vendor Save
     const idx = DB_CACHE.vendors.findIndex(ven => ven.VendorID === v.VendorID);
     if (idx !== -1) DB_CACHE.vendors[idx] = v;
     else DB_CACHE.vendors.push(v);
@@ -273,22 +286,7 @@ export const submitBid = (v: string, t: string, a: number, n: string, f: any[]) 
 export const acceptBid = (b: string, t: string) => runServer('updateBid', { BidID: b, Status: 'Accepted' });
 export const addVendorReview = (v: string, t: string, a: string, r: number, c: string) => runServer('saveReview', { ReviewID: `REV-${Date.now()}`, VendorID_Ref: v, TicketID_Ref: t, Author_Email: a, Rating: r, Comment: c, Timestamp: new Date().toISOString() });
 
-// Getters & Helpers
-export const getAllSOPs = () => DB_CACHE.sops;
-export const getSOPsForAsset = (id: string) => DB_CACHE.sops; 
-export const getAllMaintenanceSchedules = () => DB_CACHE.schedules;
-export const getMaintenanceSchedules = (id: string) => DB_CACHE.schedules.filter(s => s.AssetID_Ref === id);
-export const getAccountRequests = () => DB_CACHE.accountRequests;
-export const getVendors = () => DB_CACHE.vendors;
-export const getVendorHistory = (id: string) => DB_CACHE.bids.filter(b => b.VendorID_Ref === id);
-export const getOpenTicketsForVendors = () => DB_CACHE.tickets.filter(t => t.Status === 'Open for Bid');
-export const getVendorTickets = (id: string) => DB_CACHE.tickets.filter(t => t.Assigned_VendorID_Ref === id);
-export const getBidsForTicket = (id: string) => DB_CACHE.bids.filter(b => b.TicketID_Ref === id);
-export const getAttachmentsForBid = (id: string) => [];
-export const getVendorReview = (id: string) => DB_CACHE.reviews.find(r => r.TicketID_Ref === id);
-export const getTicketById = (id: string) => DB_CACHE.tickets.find(t => t.TicketID === id);
-
-// --- TICKET ACTIONS (Optimistic) ---
+// --- TICKET ACTIONS ---
 export const claimTicket = (id: string, email: string) => {
     const t = DB_CACHE.tickets.find(ticket => ticket.TicketID === id);
     if(t) { t.Status = 'Assigned'; t.Assigned_Staff = email; }
@@ -313,26 +311,11 @@ export const toggleTicketPublic = (id: string, val: boolean) => {
 export const mergeTickets = (t: string, s: string, u: string) => console.log("Merge not fully impl");
 export const checkAndGeneratePMTickets = () => 0;
 
-export const lookup = {
-  campus: (id: string) => DB_CACHE.campuses.find(c => c.CampusID === id)?.Campus_Name || id,
-  building: (id: string) => DB_CACHE.buildings.find(b => b.BuildingID === id)?.Building_Name || id,
-  location: (id: string) => DB_CACHE.locations.find(l => l.LocationID === id)?.Location_Name || id,
-  asset: (id: string) => DB_CACHE.assets.find(a => a.AssetID === id)?.Asset_Name || 'None',
-};
-export const getAssetDetails = (id: string) => DB_CACHE.assets.find(a => a.AssetID === id);
-export const getAttachments = (id: string) => DB_CACHE.ticketAttachments.filter(a => a.TicketID_Ref === id);
-
-// Fix White Screen Crash: Safely check for Tech role
-export const getTechnicians = () => DB_CACHE.users.filter(u => u.User_Type && u.User_Type.includes('Tech')); 
-
-// --- PERMISSIONS HELPER (Robust) ---
+// --- PERMISSIONS HELPER ---
 export const hasPermission = (user: User, permission: string): boolean => {
   if (!user) return false;
   if (user.User_Type && (user.User_Type.includes('Admin') || user.User_Type.includes('Chair'))) return true;
-  
-  // Safe split for empty roles
   const userRoles = user.User_Type ? user.User_Type.split(',').map(r => r.trim()) : [];
-  
   const definedRoles = getRoles(); 
   for (const roleName of userRoles) {
     const roleDef = definedRoles.find(r => r.RoleName === roleName);
