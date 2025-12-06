@@ -16,10 +16,10 @@ const TABS = {
   SOP: 'SOP_Library',
   SCHEDULES: 'PM_Schedules',
   ATTACHMENTS: 'Ticket_Attachments',
-  ROLES: 'Roles', // Ensure you have a 'Roles' tab or remove role logic
-  REQUESTS: 'Account_Requests', // Ensure you have this tab
-  BIDS: 'Bids', // Ensure you have this tab
-  REVIEWS: 'Reviews', // Ensure you have this tab
+  ROLES: 'Roles',
+  REQUESTS: 'Account_Requests',
+  BIDS: 'Bids',
+  REVIEWS: 'Reviews',
   ASSET_SOP: 'Asset_SOP_Link'
 };
 
@@ -39,22 +39,19 @@ function getSessionUserEmail() {
 }
 
 /* =========================================
-   2. DATA FETCHING (THE FIX FOR EMPTY VIEWS)
+   2. DATA FETCHING
    ========================================= */
 
 function getDatabaseData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const data = {};
   
-  // Read every tab defined in TABS
   Object.keys(TABS).forEach(key => {
     const tabName = TABS[key];
     const sheet = ss.getSheetByName(tabName);
-    // We send the data back using the KEY name (e.g. "USERS") to avoid case issues
     data[key] = sheet ? sheetToJson(sheet) : [];
   });
   
-  // Add Config if needed
   data['CONFIG'] = {
     appName: "GCCA Facilities",
     unauthorizedMessage: "Access Restricted. Please contact administration.",
@@ -80,15 +77,13 @@ function sheetToJson(sheet) {
    3. UNIVERSAL SAVE FUNCTION
    ========================================= */
 
-// Helper to save ANY object to ANY sheet
 function genericSave(tabName, idColumn, dataObj) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(tabName);
   
-  // Auto-create sheet if missing (Safety net)
   if (!sheet) {
     sheet = ss.insertSheet(tabName);
-    sheet.appendRow(Object.keys(dataObj)); // Add headers
+    sheet.appendRow(Object.keys(dataObj));
   }
 
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
@@ -101,7 +96,7 @@ function genericSave(tabName, idColumn, dataObj) {
     if (rowId == idValue) {
       const newRow = headers.map(h => dataObj.hasOwnProperty(h) ? dataObj[h] : allData[i][headers.indexOf(h)]);
       sheet.getRange(i + 1, 1, 1, newRow.length).setValues([newRow]);
-      return idValue; // Updated
+      return idValue; 
     }
   }
 
@@ -129,17 +124,13 @@ function genericDelete(tabName, idColumn, idValue) {
 }
 
 /* =========================================
-   4. SPECIFIC HANDLERS (CONNECTING THE WIRES)
+   4. SPECIFIC HANDLERS
    ========================================= */
 
-// --- TICKETS ---
 function saveTicket(data) { return genericSave(TABS.TICKETS, 'TicketID', data); }
+
 function updateTicketStatus(id, status, assignedTo) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TABS.TICKETS);
-  // ... (Keep your existing robust update logic here if preferred, or use genericSave)
-  // For simplicity, let's use genericSave logic:
-  // We need to fetch the existing ticket to merge, but genericSave handles that if we pass the ID.
-  // However, specific status update is faster with direct cell write:
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   for(let i=1; i<data.length; i++) {
@@ -151,11 +142,9 @@ function updateTicketStatus(id, status, assignedTo) {
   }
 }
 
-// --- USERS ---
 function saveUser(data) { return genericSave(TABS.USERS, 'UserID', data); }
 function deleteUser(id) { genericDelete(TABS.USERS, 'UserID', id); }
 
-// --- ASSETS & LOCATIONS ---
 function addBuilding(campusId, name) { 
   return genericSave(TABS.BUILDINGS, 'BuildingID', { 
     BuildingID: 'BLD-' + Date.now(), CampusID_Ref: campusId, Building_Name: name 
@@ -178,11 +167,9 @@ function addAsset(locationId, name) {
 function updateAsset(data) { return genericSave(TABS.ASSETS, 'AssetID', data); }
 function deleteAsset(id) { genericDelete(TABS.ASSETS, 'AssetID', id); }
 
-// --- VENDORS ---
 function saveVendor(data) { return genericSave(TABS.VENDORS, 'VendorID', data); }
 function deleteVendor(id) { genericDelete(TABS.VENDORS, 'VendorID', id); }
 
-// --- OPERATIONS (SOPs, Schedules) ---
 function saveSOP(data) { return genericSave(TABS.SOP, 'SOP_ID', data); }
 function deleteSOP(id) { genericDelete(TABS.SOP, 'SOP_ID', id); }
 function linkSOP(assetId, sopId) {
@@ -193,20 +180,17 @@ function linkSOP(assetId, sopId) {
 function saveMaintenanceSchedule(data) { return genericSave(TABS.SCHEDULES, 'ScheduleID', data); }
 function deleteMaintenanceSchedule(id) { genericDelete(TABS.SCHEDULES, 'ScheduleID', id); }
 
-// --- ADMIN ---
-function saveRole(data) { return genericSave(TABS.ROLES, 'RoleName', data); } // Assuming RoleName is unique ID
+function saveRole(data) { return genericSave(TABS.ROLES, 'RoleName', data); }
 function deleteRole(id) { genericDelete(TABS.ROLES, 'RoleName', id); }
 function submitAccountRequest(data) { return genericSave(TABS.REQUESTS, 'RequestID', data); }
 function deleteAccountRequest(id) { genericDelete(TABS.REQUESTS, 'RequestID', id); }
 
-// --- BIDS ---
 function submitBid(data) { return genericSave(TABS.BIDS, 'BidID', data); }
 function updateBid(data) { return genericSave(TABS.BIDS, 'BidID', data); }
 function saveReview(data) { return genericSave(TABS.REVIEWS, 'ReviewID', data); }
 
-
 /* =========================================
-   5. FILE UPLOADS & AI (Keep your existing working code)
+   5. FILE UPLOADS & AI
    ========================================= */
 function uploadFile(data, filename, mimeType, ticketId) {
   try {
@@ -239,6 +223,7 @@ function callGemini(promptText) {
     return JSON.parse(response.getContentText()).candidates[0].content.parts[0].text;
   } catch (e) { return "AI Service Unavailable"; }
 }
+
 /* =========================================
    6. SECURE AUTHENTICATION (OTP)
    ========================================= */
@@ -249,10 +234,8 @@ function requestOtp(email) {
   
   // 1. Check if user exists in our system first
   const data = getDatabaseData();
-  // Handle case keys if they differ (USERS vs Users)
   const users = data.USERS || data.Users || [];
   
-  // Case insensitive search
   const userExists = users.some(function(u) { 
     return String(u.Email).trim().toLowerCase() === email; 
   });
@@ -266,7 +249,7 @@ function requestOtp(email) {
   
   // 3. Store in Cache for 10 minutes
   const cache = CacheService.getScriptCache();
-  cache.put("OTP_" + email, code, 600); // 600 seconds
+  cache.put("OTP_" + email, code, 600);
   
   // 4. Send Email
   try {
@@ -296,7 +279,6 @@ function verifyOtp(email, code) {
   const storedCode = cache.get("OTP_" + email);
   
   if (storedCode && storedCode === code.toString()) {
-    // Correct! Remove from cache to prevent reuse
     cache.remove("OTP_" + email);
     return true;
   }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User } from './types';
 import { getSessionUserEmail } from './services/api';
 import { initDatabase, getUsers } from './services/dataService';
-import { Loader2, Users, Shield, Database, Briefcase, Settings, Calendar } from 'lucide-react';
+import { Loader2, Users, Shield, Database, Briefcase, Settings, Calendar, LogOut } from 'lucide-react';
 
 // Components
 import TicketForm from './components/TicketForm';
@@ -18,6 +18,7 @@ import VendorManager from './components/VendorManager';
 
 // --- CONFIG ---
 const SUPER_ADMIN_EMAIL = 'preston@grovecitychristianacademy.com';
+const STORAGE_KEY = 'gcca_user_session';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -36,10 +37,19 @@ export default function App() {
         const users = getUsers();
         setAllUsers(users);
 
-        // 2. Try to get Email from Google
-        const email = await getSessionUserEmail();
+        // 2. Try to get Email from Google (Primary Method)
+        let email = await getSessionUserEmail();
         
-        // 3. LOGIC: If Google gave us an email, try to auto-login.
+        // 3. FALLBACK: Check Local Storage if Google blocked us
+        if (!email || email === '') {
+           const storedEmail = localStorage.getItem(STORAGE_KEY);
+           if (storedEmail) {
+             console.log("Restoring session from local storage:", storedEmail);
+             email = storedEmail;
+           }
+        }
+        
+        // 4. LOGIC: Attempt Login
         if (email && email !== '') {
            setRealUserEmail(email);
            // Case insensitive match
@@ -64,13 +74,24 @@ export default function App() {
   const handleManualLogin = (email: string) => {
     const user = allUsers.find(u => u.Email.toLowerCase() === email.toLowerCase());
     if (user) {
+      // SUCCESS: Save to storage for next time
+      localStorage.setItem(STORAGE_KEY, email);
+      
       setRealUserEmail(email);
       setCurrentUser(user);
     } else {
-      // Valid email but not in DB -> Show Access Denied
+      // Valid email but not in DB -> Access Denied (don't save session)
       setRealUserEmail(email);
       setCurrentUser(null); 
     }
+  };
+
+  // --- LOGOUT HANDLER ---
+  const handleLogout = () => {
+    localStorage.removeItem(STORAGE_KEY); // Clear saved session
+    setCurrentUser(null);
+    setRealUserEmail('');
+    window.location.reload();
   };
 
   // 2. SUPER ADMIN MASQUERADE FUNCTION
@@ -105,12 +126,9 @@ export default function App() {
 
   // 4. RENDER LOGIN LOGIC
   if (!currentUser) {
-    // If we have an email but they aren't in the DB -> Access Denied
     if (realUserEmail) {
        return <AccessDenied userEmail={realUserEmail} />;
     }
-    
-    // If NO email detected -> Secure Manual Login
     return <LoginScreen onLogin={handleManualLogin} />;
   }
 
@@ -147,9 +165,19 @@ export default function App() {
               </div>
             )}
             
-            <div className="text-right hidden sm:block">
-              <div className="text-sm font-semibold">{currentUser.Name}</div>
-              <div className="text-xs text-gray-300 opacity-80">{currentUser.User_Type}</div>
+            <div className="text-right flex items-center gap-3">
+              <div className="hidden sm:block">
+                <div className="text-sm font-semibold">{currentUser.Name}</div>
+                <div className="text-xs text-gray-300 opacity-80">{currentUser.User_Type}</div>
+              </div>
+              
+              <button 
+                onClick={handleLogout}
+                className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors text-white"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>
