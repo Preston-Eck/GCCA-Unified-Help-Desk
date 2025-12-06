@@ -62,7 +62,7 @@ export interface MaintenanceSchedule {
   Frequency: Frequency;
   LastPerformed?: string;
   NextDue: string;
-  SOP_ID_Ref?: string;
+  SOP_ID_Ref?: string; // Link to an SOP for this task
 }
 
 export interface SOP {
@@ -81,9 +81,9 @@ export interface AssetSOPLink {
 export interface TicketAttachment {
   AttachmentID: string;
   TicketID_Ref: string;
-  BidID_Ref?: string;
+  BidID_Ref?: string; // Optional: Link to a specific vendor bid
   File_Name: string;
-  Drive_URL: string;
+  Drive_URL: string; // Mocked URL
   Mime_Type: string;
 }
 
@@ -92,7 +92,7 @@ export interface TicketComment {
   Author_Email: string;
   Timestamp: string;
   Text: string;
-  IsStatusChange?: boolean;
+  IsStatusChange?: boolean; // If true, this is a system log
 }
 
 // --- Vendor Types ---
@@ -111,7 +111,7 @@ export interface VendorBid {
   BidID: string;
   TicketID_Ref: string;
   VendorID_Ref: string;
-  VendorName: string;
+  VendorName: string; // Denormalized for display
   Amount: number;
   Notes: string;
   DateSubmitted: string;
@@ -123,7 +123,7 @@ export interface VendorReview {
   VendorID_Ref: string;
   TicketID_Ref: string;
   Author_Email: string;
-  Rating: number;
+  Rating: number; // 1 to 5
   Comment: string;
   Timestamp: string;
 }
@@ -139,7 +139,7 @@ export enum TicketStatus {
   NEW = 'New',
   PENDING_APPROVAL = 'Pending Approval',
   ASSIGNED = 'Assigned',
-  OPEN_FOR_BID = 'Open for Bid',
+  OPEN_FOR_BID = 'Open for Bid', // New Status
   COMPLETED = 'Completed',
   RESOLVED = 'Resolved'
 }
@@ -151,7 +151,7 @@ export enum Department {
 
 export interface Ticket {
   TicketID: string;
-  Date_Submitted: string;
+  Date_Submitted: string; // ISO String
   Submitter_Email: string;
   CampusID_Ref: string;
   BuildingID_Ref?: string;
@@ -162,12 +162,16 @@ export interface Ticket {
   Category: 'IT' | 'Facilities';
   Status: 'New' | 'Pending Approval' | 'Assigned' | 'Open for Bid' | 'Completed' | 'Resolved';
   Priority?: Priority;
-  Assigned_Staff?: string;
-  Assigned_VendorID_Ref?: string;
+  Assigned_Staff?: string; // Email
+  Assigned_VendorID_Ref?: string; // If assigned to external vendor
   AI_Suggested_Plan?: string;
   AI_Questions?: string;
+  
+  // New Fields
   Comments: TicketComment[];
   IsPublic: boolean;
+  
+  // Task Breakdown
   ParentTicketID?: string;
   TicketType?: 'Incident' | 'Task' | 'Maintenance';
 }
@@ -193,23 +197,24 @@ export interface Recommendation {
 }
 
 // --- RBAC & Permissions ---
+
 export type Permission = 
   | 'VIEW_DASHBOARD'
   | 'SUBMIT_TICKETS'
   | 'VIEW_MY_TICKETS'
-  | 'VIEW_DEPT_TICKETS'
-  | 'VIEW_CAMPUS_TICKETS'
-  | 'VIEW_ALL_BIDS'
+  | 'VIEW_DEPT_TICKETS'   // Chairs
+  | 'VIEW_CAMPUS_TICKETS' // Principals
+  | 'VIEW_ALL_BIDS'       // Board/Admin/Approver
   | 'MANAGE_ASSETS'
   | 'MANAGE_USERS'
   | 'MANAGE_VENDORS'
-  | 'MANAGE_ROLES'
-  | 'MANAGE_SETTINGS'
-  | 'MANAGE_SOPS'
-  | 'MANAGE_SCHEDULES'
+  | 'MANAGE_ROLES'        // Super Admin only
+  | 'MANAGE_SETTINGS'     // Admin
+  | 'MANAGE_SOPS'         // New
+  | 'MANAGE_SCHEDULES'    // New
   | 'ASSIGN_TICKETS'
   | 'APPROVE_TICKETS'
-  | 'CLAIM_TICKETS'
+  | 'CLAIM_TICKETS'       // Techs
   | 'MERGE_TICKETS';
 
 export interface RoleDefinition {
