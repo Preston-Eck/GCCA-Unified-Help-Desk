@@ -6,8 +6,8 @@ export interface SiteConfig {
   unauthorizedMessage: string;
   supportContact: string;
   announcementBanner: string;
-  ticketCategories: string[]; 
-  priorities: string[];       
+  ticketCategories: string[];
+  priorities: string[];
 }
 
 // --- 2. USERS & PROFILES ---
@@ -15,9 +15,9 @@ export interface User {
   UserID: string;
   Email: string;
   Name: string;
-  User_Type: string; 
+  User_Type: string;
   Department: string;
-  // Expanded Profile from CSV
+  // Expanded Profile
   Primary_Building?: string;
   Primary_Room?: string;
   Grades_Taught?: string;
@@ -69,18 +69,6 @@ export interface Location {
   Floor_Type?: string;
 }
 
-export interface LocationSubmission {
-  SubmissionID: string;
-  TicketID_Ref: string;
-  Submitter_Email: string;
-  CampusID_Ref: string;
-  BuildingID_Ref: string;
-  New_Location_Name: string;
-  Status: string;
-  Admin_Review_Notes?: string;
-  Admin_Corrected_BuildingID?: string;
-}
-
 // --- 4. ASSETS & MAINTENANCE ---
 export interface Asset {
   AssetID: string;
@@ -91,19 +79,9 @@ export interface Asset {
   Warranty_Expires?: string;
   Last_Known_Meter_Reading?: number;
   Last_Meter_Reading_Date?: string;
-  Parent_AssetID_Ref?: string; 
-  Model_Number?: string;       
-  InstallDate?: string;        
-}
-
-export interface AssetSubmission {
-  SubmissionID: string;
-  TicketID_Ref: string;
-  Submitter_Email: string;
-  New_Asset_Name: string;
-  New_Category?: string;
-  Status: string;
-  Admin_Review_Notes?: string;
+  Parent_AssetID_Ref?: string;
+  Model_Number?: string;
+  InstallDate?: string;
 }
 
 export interface MeterReading {
@@ -115,6 +93,23 @@ export interface MeterReading {
 }
 
 // --- 5. WORKFLOW (Tickets & Tasks) ---
+export enum Priority {
+  LOW = 'Low',
+  MEDIUM = 'Medium',
+  HIGH = 'High',
+  CRITICAL = 'Critical'
+}
+
+export enum TicketStatus {
+  NEW = 'New',
+  PENDING_APPROVAL = 'Pending Approval',
+  ASSIGNED = 'Assigned',
+  OPEN_FOR_BID = 'Open for Bid',
+  COMPLETED = 'Completed',
+  RESOLVED = 'Resolved',
+  CLOSED = 'Closed'
+}
+
 export interface Ticket {
   TicketID: string;
   Date_Submitted: string;
@@ -126,7 +121,7 @@ export interface Ticket {
   Title: string;
   Description: string;
   Category: string;
-  Status: string;
+  Status: string; // Using string to allow flexibility, but usually TicketStatus
   Priority?: string;
   Assigned_Staff?: string;
   Assigned_VendorID_Ref?: string;
@@ -137,20 +132,30 @@ export interface Ticket {
   Is_Important?: boolean;
   Priority_Quadrant?: number;
   AI_Suggested_Plan?: string;
-  Location_Listed?: boolean;
-  Asset_Listed?: boolean;
   AI_Questions?: string;
   User_Answers?: string;
   Date_Completed?: string;
   Exclude_from_Report?: boolean;
   Scheduled_Start_Date?: string;
+  Comments?: TicketComment[];
 }
 
-export interface TicketFollower {
-  FollowID: string;
+export interface TicketComment {
+  CommentID: string;
   TicketID_Ref: string;
-  Follower_Email: string;
-  Follower_Type: 'Watcher' | 'Stakeholder' | 'CC';
+  Author_Email: string;
+  Timestamp: string;
+  Comment_Text: string;
+  Visibility: 'Public' | 'Internal';
+}
+
+export interface TicketAttachment {
+  AttachmentID: string;
+  TicketID_Ref: string;
+  File_Name: string;
+  Drive_URL: string;
+  Mime_Type: string;
+  Attachment_Type?: string;
 }
 
 export interface Task {
@@ -160,18 +165,9 @@ export interface Task {
   Task_Status: 'Pending' | 'In Progress' | 'Done' | 'Blocked';
   Assigned_Staff?: string;
   Assigned_VendorID_Ref?: string;
-  Delegation_Accepted?: boolean;
   Labor_Hours?: number;
   Material_Costs?: number;
   Vendor_Invoice_Total?: number;
-}
-
-export interface TaskComment {
-  Task_Comment_ID: string;
-  TaskID_Ref: string;
-  Author_User: string;
-  Timestamp: string;
-  Comment_Text: string;
 }
 
 // --- 6. INVENTORY & MATERIALS ---
@@ -180,23 +176,11 @@ export interface Material {
   Material_Name: string;
   Category: string;
   Location: string;
-  Purchase_Unit_Name: string; 
+  Purchase_Unit_Name: string;
   Purchase_Unit_Cost: number;
   Items_per_Unit: number;
   Quantity_on_Hand: number;
   Reorder_Point: number;
-}
-
-export interface MaterialTransaction {
-  UsedID: string;
-  TicketID_Ref?: string;
-  TaskID_Ref?: string;
-  AssetID_Ref?: string;
-  LocationID_Ref?: string;
-  MaterialID_Ref: string;
-  Quantity_Used: number;
-  Timestamp: string;
-  Logged_By_Ref: string;
 }
 
 export interface PurchaseLog {
@@ -206,41 +190,28 @@ export interface PurchaseLog {
   VendorID_Ref: string;
   Quantity_Purchased: number;
   Total_Cost_for_Item: number;
-  Receipt_Type?: string;
-  Receipt_Image?: string;
-  Receipt_File?: string;
 }
 
 // --- 7. VENDORS & PROCUREMENT ---
 export interface Vendor {
   VendorID: string;
-  Vendor_Name: string; // "Vendor_Name" in CSV vs "CompanyName" in old code
-  Specialty?: string;
-  Contact_Person?: string;
-  Phone?: string;
-  Email?: string;
-  Address?: string;
-  Status?: string; // Derived from reviews/bids if not in CSV?
-}
-
-export interface VendorRecommendation {
-  RecommendationID: string;
-  Submitter_Email: string;
-  Submission_Date: string;
   Vendor_Name: string;
   Specialty?: string;
   Contact_Person?: string;
   Phone?: string;
   Email?: string;
-  Reason_for_Recommendation?: string;
-  Status: 'Pending' | 'Approved' | 'Rejected';
+  Address?: string;
+  Website?: string;
+  Status?: string;
+  ServiceType?: string;
+  DateJoined?: string;
 }
 
 export interface VendorBid {
   BidID: string;
   TicketID_Ref: string;
   VendorID_Ref: string;
-  VendorName?: string; 
+  VendorName?: string;
   Amount: number;
   Notes: string;
   DateSubmitted: string;
@@ -252,24 +223,21 @@ export interface VendorReview {
   VendorID_Ref: string;
   TicketID_Ref: string;
   Author_Email: string;
-  Rating: number; 
+  Rating: number;
   Comment: string;
   Timestamp: string;
 }
 
-// --- 8. DOCUMENTS & SOPs ---
-export interface Document {
-  DocumentID: string;
-  Document_Name: string;
-  Document_Type: string;
-  Category: string;
-  Document_File?: string;
-  Document_Photo?: string;
-  Upload_Date: string;
-  Related_AssetID_Ref?: string;
-  Related_TicketID_Ref?: string;
-  Related_VendorID_Ref?: string;
-  Related_LocationID_Ref?: string;
+// --- 8. OPERATIONS ---
+export interface MaintenanceSchedule {
+  PM_ID: string;
+  AssetID_Ref: string;
+  Task_Name: string;
+  Frequency: string;
+  Next_Due_Date: string;
+  Meter_Frequency_Trigger?: number;
+  Meter_Type?: string;
+  Meter_Trigger_At?: number;
 }
 
 export interface SOP {
@@ -279,11 +247,24 @@ export interface SOP {
   Concise_Procedure_Text: string;
   Google_Doc_Link: string;
   AI_Prompt?: string;
-  Last_Reviewed_By?: string;
-  Last_Reviewed_Date?: string;
 }
 
-// --- 9. PERMISSIONS (GRANULAR) ---
+export interface AssetSOPLink {
+  Link_ID: string;
+  AssetID_Ref: string;
+  SOP_ID_Ref: string;
+}
+
+export interface Document {
+  DocumentID: string;
+  Document_Name: string;
+  Document_Type: string;
+  Category: string;
+  Document_File?: string;
+  Upload_Date: string;
+}
+
+// --- 9. PERMISSIONS ---
 export type Permission = 
   | 'VIEW_DASHBOARD' | 'VIEW_ADMIN_PANEL'
   | 'TICKET_CREATE' | 'TICKET_READ_OWN' | 'TICKET_READ_DEPT' | 'TICKET_READ_ALL' | 'TICKET_UPDATE_OWN' | 'TICKET_UPDATE_ALL' | 'TICKET_DELETE' | 'TICKET_ASSIGN' | 'TICKET_APPROVE' | 'TICKET_MERGE'
@@ -292,7 +273,10 @@ export type Permission =
   | 'INVENTORY_READ' | 'INVENTORY_ADJUST' | 'INVENTORY_PURCHASE'
   | 'VENDOR_READ' | 'VENDOR_MANAGE' | 'VENDOR_APPROVE'
   | 'USER_READ' | 'USER_MANAGE' | 'ROLE_MANAGE'
-  | 'SOP_READ' | 'SOP_MANAGE' | 'DOC_MANAGE';
+  | 'SOP_READ' | 'SOP_MANAGE' | 'DOC_MANAGE'
+  | 'VIEW_MY_TICKETS' | 'VIEW_DEPT_TICKETS' | 'VIEW_CAMPUS_TICKETS' | 'VIEW_ALL_BIDS' 
+  | 'MANAGE_ASSETS' | 'MANAGE_USERS' | 'MANAGE_VENDORS' | 'MANAGE_ROLES' | 'MANAGE_SETTINGS' 
+  | 'MANAGE_SOPS' | 'MANAGE_SCHEDULES' | 'ASSIGN_TICKETS' | 'APPROVE_TICKETS' | 'CLAIM_TICKETS' | 'MERGE_TICKETS';
 
 export interface RoleDefinition {
   RoleName: string;
