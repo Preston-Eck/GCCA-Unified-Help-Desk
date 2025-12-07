@@ -27,6 +27,22 @@ const DB_CACHE = {
   schema: {} as Record<string, string[]>
 };
 
+// --- ADD CAMPUS API FUNCTIONS ---
+export const saveCampus = (c: Campus) => {
+  const newCampus = { ...c, CampusID: c.CampusID || `CMP-${Date.now()}` };
+  // Optimistic update
+  const idx = DB_CACHE.campuses.findIndex(x => x.CampusID === newCampus.CampusID);
+  if (idx >= 0) DB_CACHE.campuses[idx] = newCampus;
+  else DB_CACHE.campuses.push(newCampus);
+  
+  return runServer('saveCampus', newCampus);
+};
+
+export const deleteCampus = (id: string) => {
+  DB_CACHE.campuses = DB_CACHE.campuses.filter(c => c.CampusID !== id);
+  return runServer('deleteCampus', id);
+};
+
 // --- THE BRIDGE ---
 const runServer = (fnName: string, ...args: any[]): Promise<any> => {
   return new Promise((resolve, reject) => {
@@ -384,14 +400,19 @@ export const APP_FIELDS: AppField[] = [
   { id: 'user.roles', label: 'Roles', description: 'Comma-separated roles', type: 'text' },
   { id: 'user.dept', label: 'Department', description: 'Comma-separated depts', type: 'text' },
 
-  // --- CAMPUS ---
+ // --- CAMPUS (NEW) ---
   { id: 'campus.id', label: 'Campus ID', description: 'Unique Identifier', type: 'text' },
-  { id: 'campus.name', label: 'Campus Name', description: 'Main campus identifier', type: 'text' },
+  { id: 'campus.name', label: 'Campus Name', description: 'Display Name', type: 'text' },
+  { id: 'campus.address', label: 'Address', description: 'Physical Address', type: 'text' },
+  { id: 'campus.phone', label: 'Phone', description: 'Main Contact Number', type: 'text' },
+  { id: 'campus.map', label: 'Map URL', description: 'Link to Map PDF/Image', type: 'text' },
 
-  // --- BUILDINGS ---
+  // --- BUILDINGS (Updated) ---
   { id: 'building.id', label: 'Building ID', description: 'Unique Identifier', type: 'text' },
   { id: 'building.name', label: 'Building Name', description: 'Display Name', type: 'text' },
   { id: 'building.campus_ref', label: 'Campus Ref', description: 'Link to Parent Campus', type: 'text' },
+  { id: 'building.floor_plan', label: 'Floor Plan', description: 'Link to Plan PDF', type: 'text' }, // NEW
+  { id: 'building.photo', label: 'Cover Photo', description: 'Link to Photo', type: 'text' },       // NEW
 
   // --- LOCATIONS ---
   { id: 'location.id', label: 'Location ID', description: 'Unique Identifier', type: 'text' },

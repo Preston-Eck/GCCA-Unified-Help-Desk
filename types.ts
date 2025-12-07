@@ -29,6 +29,9 @@ export interface SiteConfig {
 export interface Campus {
   CampusID: string;
   Campus_Name: string;
+  Address?: string;       // <--- NEW
+  PhoneNumber?: string;   // <--- NEW
+  MapURL?: string;        // <--- NEW (for PDF/Image link)
 }
 
 export interface Building {

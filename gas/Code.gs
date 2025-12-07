@@ -190,6 +190,10 @@ function submitBid(data) { return genericSave(TABS.BIDS, 'BidID', data); }
 function updateBid(data) { return genericSave(TABS.BIDS, 'BidID', data); }
 function saveReview(data) { return genericSave(TABS.REVIEWS, 'ReviewID', data); }
 
+// --- CAMPUS ---
+function saveCampus(data) { return genericSave(TABS.CAMPUSES, 'CampusID', data); }
+function deleteCampus(id) { genericDelete(TABS.CAMPUSES, 'CampusID', id); }
+
 /* =========================================
    5. FILE UPLOADS & AI
    ========================================= */

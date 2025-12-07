@@ -15,6 +15,9 @@ import OperationsDashboard from './components/OperationsDashboard';
 import RoleManager from './components/RoleManager';
 import UserManager from './components/UserManager';
 import VendorManager from './components/VendorManager';
+import CampusManager from './components/CampusManager';
+import MappingDashboard from './components/MappingDashboard';
+
 
 // --- CONFIG ---
 const SUPER_ADMIN_EMAIL = 'preston@grovecitychristianacademy.com';
@@ -233,6 +236,11 @@ export default function App() {
                <Settings className="w-4 h-4" /> Settings
              </button>
            )}
+           {hasPermission('MANAGE_ASSETS') && (
+             <button onClick={() => setView('campuses')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'campuses' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
+               <Map className="w-4 h-4" /> Campuses
+             </button>
+           )}
         </div>
 
         {/* VIEW ROUTING */}
@@ -245,6 +253,8 @@ export default function App() {
           {view === 'vendors' && <VendorManager />} 
           {view === 'roles' && <RoleManager />}
           {view === 'admin' && <AdminPanel onSuccess={() => setRefreshKey(k => k + 1)} />}
+          {view === 'campuses' && <CampusManager user={currentUser} />}
+          {view === 'mapping' && <MappingDashboard />}
         </div>
       </main>
     </div>
