@@ -288,3 +288,37 @@ function updateSchema() {
   });
   return "Schema Sync Complete";
 }
+/* =========================================
+   6. DEBUG & EXPORT TOOLS
+   ========================================= */
+
+function emailDatabaseExport() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  const blobs = [];
+  
+  sheets.forEach(sheet => {
+    const name = sheet.getName();
+    const data = sheet.getDataRange().getValues();
+    const csvString = data.map(row => 
+      row.map(cell => {
+        let cellStr = String(cell).replace(/"/g, '""'); 
+        if (cellStr.search(/("|,|\n)/g) >= 0) cellStr = `"${cellStr}"`;
+        return cellStr;
+      }).join(",")
+    ).join("\n");
+    blobs.push(Utilities.newBlob(csvString, 'text/csv', `${name}.csv`));
+  });
+  
+  const zip = Utilities.zip(blobs, 'GCCA_Database_Export.zip');
+  const recipient = Session.getActiveUser().getEmail();
+  
+  MailApp.sendEmail({
+    to: recipient,
+    subject: "GCCA Database CSV Export",
+    body: "Attached is the full export of your spreadsheet tables.",
+    attachments: [zip]
+  });
+  
+  return "Sent export to " + recipient;
+}

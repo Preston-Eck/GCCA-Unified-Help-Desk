@@ -1,23 +1,28 @@
 import React, { useState } from 'react';
 import { Campus } from '../types';
 import { getCampuses, saveCampus, deleteCampus } from '../services/dataService';
-import { Map as MapIcon, Phone, MapPin, Plus, Save, Trash2, X } from 'lucide-react';
+import { Map as MapIcon, Phone, MapPin, Plus, Save, Trash2, X } from 'lucide-react'; // <--- FIXED IMPORT
 
 interface Props {
-  user: any; // Passed for permission checks if needed later
+  user: any; 
 }
 
 const CampusManager: React.FC<Props> = () => {
   const [campuses, setCampuses] = useState<Campus[]>(getCampuses());
   const [editing, setEditing] = useState<Partial<Campus> | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const handleRefresh = () => setCampuses([...getCampuses()]);
+  const handleRefresh = () => {
+    setCampuses([...getCampuses()]);
+    setRefreshKey(k => k + 1);
+  };
 
   const handleSave = async () => {
     if (editing && editing.Campus_Name) {
       await saveCampus(editing as Campus);
       setEditing(null);
-      handleRefresh();
+      // Allow time for server roundtrip if needed, or rely on optimistic update
+      setTimeout(handleRefresh, 500); 
     }
   };
 
@@ -33,7 +38,7 @@ const CampusManager: React.FC<Props> = () => {
       <div className="p-6 border-b border-gray-200 flex justify-between items-center bg-gray-50">
         <div>
           <h2 className="text-xl font-bold text-[#355E3B] flex items-center gap-2">
-            <Map className="w-6 h-6" /> Campus Management
+            <MapIcon className="w-6 h-6" /> Campus Management
           </h2>
           <p className="text-xs text-gray-500">Manage campus locations, maps, and contact info.</p>
         </div>
@@ -57,19 +62,19 @@ const CampusManager: React.FC<Props> = () => {
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-gray-400" />
-                <span>{campus.PhoneNumber || 'No phone set'}</span>
+                <span>{campus.Phone_Number || 'No phone set'}</span>
               </div>
-              {campus.MapURL && (
+              {campus.Campus_Map && (
                 <div className="flex items-center gap-2 text-blue-600">
                   <MapIcon className="w-4 h-4" />
-                  <a href={campus.MapURL} target="_blank" rel="noreferrer" className="hover:underline">View Map</a>
+                  <a href={campus.Campus_Map} target="_blank" rel="noreferrer" className="hover:underline">View Map</a>
                 </div>
               )}
             </div>
 
             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
               <button onClick={() => setEditing(campus)} className="p-1.5 bg-white border rounded shadow hover:text-blue-600">
-                <MapPin className="w-4 h-4" /> {/* Edit Icon placeholder */}
+                <MapPin className="w-4 h-4" />
               </button>
               <button onClick={() => handleDelete(campus.CampusID)} className="p-1.5 bg-white border rounded shadow hover:text-red-600">
                 <Trash2 className="w-4 h-4" />
@@ -109,16 +114,16 @@ const CampusManager: React.FC<Props> = () => {
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Phone</label>
                 <input 
                   className="w-full border p-2 rounded" 
-                  value={editing.PhoneNumber || ''} 
-                  onChange={e => setEditing({...editing, PhoneNumber: e.target.value})}
+                  value={editing.Phone_Number || ''} 
+                  onChange={e => setEditing({...editing, Phone_Number: e.target.value})}
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Map URL (Drive Link)</label>
                 <input 
                   className="w-full border p-2 rounded" 
-                  value={editing.MapURL || ''} 
-                  onChange={e => setEditing({...editing, MapURL: e.target.value})}
+                  value={editing.Campus_Map || ''} 
+                  onChange={e => setEditing({...editing, Campus_Map: e.target.value})}
                   placeholder="https://..."
                 />
               </div>
