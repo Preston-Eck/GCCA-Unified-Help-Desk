@@ -311,3 +311,24 @@ function getSchema() {
 
 function saveMapping(data) { return genericSave(TABS.MAPPINGS, 'MappingID', data); }
 function deleteMapping(id) { genericDelete(TABS.MAPPINGS, 'MappingID', id); }
+/* =========================================
+   8. DYNAMIC COLUMN MANAGEMENT
+   ========================================= */
+
+function addColumn(sheetName, headerName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return { success: false, message: "Sheet not found" };
+  
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  
+  // Check if exists (Case insensitive)
+  if (headers.some(h => h.toLowerCase() === headerName.toLowerCase())) {
+    return { success: false, message: "Column already exists" };
+  }
+  
+  // Add new column header
+  sheet.getRange(1, lastCol + 1).setValue(headerName);
+  return { success: true };
+}

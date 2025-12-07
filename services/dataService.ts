@@ -347,18 +347,56 @@ export const fetchSchema = async () => {
 
 // 2. Define Known App Fields (The "User Inputs")
 export const APP_FIELDS: AppField[] = [
-  { id: 'ticket.title', label: 'Ticket Title', description: 'Main subject of the ticket', type: 'text' },
-  { id: 'ticket.description', label: 'Ticket Description', description: 'Detailed issue report', type: 'text' },
-  { id: 'ticket.submitter', label: 'Submitter Email', description: 'Email of person reporting', type: 'text' },
-  { id: 'ticket.status', label: 'Status', description: 'Current workflow state', type: 'select' },
-  { id: 'ticket.priority', label: 'Priority', description: 'Urgency level', type: 'select' },
-  { id: 'ticket.category', label: 'Category', description: 'Department category (IT/Facilities)', type: 'select' },
-  { id: 'user.name', label: 'User Name', description: 'Full Name', type: 'text' },
-  { id: 'user.email', label: 'User Email', description: 'Login Email', type: 'text' },
-  { id: 'user.roles', label: 'User Roles', description: 'Comma-separated roles', type: 'select' },
-  { id: 'user.dept', label: 'User Department', description: 'Comma-separated departments', type: 'select' },
-  { id: 'asset.name', label: 'Asset Name', description: 'Name of the equipment', type: 'text' },
-  { id: 'asset.model', label: 'Model Number', description: 'Manufacturer model', type: 'text' },
+  // --- TICKETS ---
+  { id: 'ticket.id', label: 'Ticket ID', description: 'Unique Identifier (T-XXXX)', type: 'text' },
+  { id: 'ticket.date', label: 'Date Submitted', description: 'ISO Date String', type: 'date' },
+  { id: 'ticket.submitter', label: 'Submitter Email', description: 'Email of requester', type: 'text' },
+  { id: 'ticket.title', label: 'Title', description: 'Short summary of issue', type: 'text' },
+  { id: 'ticket.desc', label: 'Description', description: 'Full details of issue', type: 'text' },
+  { id: 'ticket.category', label: 'Category', description: 'IT or Facilities', type: 'select' },
+  { id: 'ticket.status', label: 'Status', description: 'New, Assigned, etc.', type: 'select' },
+  { id: 'ticket.priority', label: 'Priority', description: 'Critical, High, Medium, Low', type: 'select' },
+  { id: 'ticket.campus', label: 'Campus ID', description: 'Link to Campus', type: 'text' },
+  { id: 'ticket.building', label: 'Building ID', description: 'Link to Building', type: 'text' },
+  { id: 'ticket.location', label: 'Location ID', description: 'Link to Location', type: 'text' },
+  { id: 'ticket.asset', label: 'Asset ID', description: 'Link to specific Asset', type: 'text' },
+  { id: 'ticket.assigned_staff', label: 'Assigned Staff', description: 'Email of staff member', type: 'text' },
+  { id: 'ticket.assigned_vendor', label: 'Assigned Vendor', description: 'ID of external vendor', type: 'text' },
+  { id: 'ticket.public', label: 'Is Public?', description: 'Boolean flag', type: 'boolean' },
+  { id: 'ticket.ai_plan', label: 'AI Plan', description: 'Generated suggestions', type: 'text' },
+  { id: 'ticket.comments', label: 'Comments', description: 'JSON string of history', type: 'text' },
+
+  // --- USERS ---
+  { id: 'user.id', label: 'User ID', description: 'Unique Identifier', type: 'text' },
+  { id: 'user.name', label: 'Full Name', description: 'User Display Name', type: 'text' },
+  { id: 'user.email', label: 'Email', description: 'Login Email', type: 'text' },
+  { id: 'user.roles', label: 'Roles', description: 'Comma-separated roles', type: 'text' },
+  { id: 'user.dept', label: 'Department', description: 'Comma-separated depts', type: 'text' },
+
+  // --- ASSETS ---
+  { id: 'asset.id', label: 'Asset ID', description: 'Unique Identifier', type: 'text' },
+  { id: 'asset.name', label: 'Asset Name', description: 'Equipment Name', type: 'text' },
+  { id: 'asset.model', label: 'Model Number', description: 'Manufacturer Model', type: 'text' },
+  { id: 'asset.serial', label: 'Serial Number', description: 'Unique Serial', type: 'text' },
+  { id: 'asset.install_date', label: 'Install Date', description: 'Date installed', type: 'date' },
+  { id: 'asset.location', label: 'Location Ref', description: 'Link to Location', type: 'text' },
+
+  // --- VENDORS ---
+  { id: 'vendor.id', label: 'Vendor ID', description: 'Unique Identifier', type: 'text' },
+  { id: 'vendor.company', label: 'Company Name', description: 'Business Name', type: 'text' },
+  { id: 'vendor.contact', label: 'Contact Person', description: 'Rep Name', type: 'text' },
+  { id: 'vendor.email', label: 'Contact Email', description: 'Rep Email', type: 'text' },
+  { id: 'vendor.phone', label: 'Phone', description: 'Contact Phone', type: 'text' },
+  { id: 'vendor.type', label: 'Service Type', description: 'IT, Facilities, etc.', type: 'select' },
+  { id: 'vendor.status', label: 'Status', description: 'Approved/Pending', type: 'select' },
+
+  // --- SCHEDULES ---
+  { id: 'schedule.id', label: 'Schedule ID', description: 'Unique Identifier', type: 'text' },
+  { id: 'schedule.task', label: 'Task Name', description: 'Name of PM Task', type: 'text' },
+  { id: 'schedule.asset', label: 'Asset Ref', description: 'Link to Asset', type: 'text' },
+  { id: 'schedule.freq', label: 'Frequency', description: 'Daily, Weekly, etc.', type: 'select' },
+  { id: 'schedule.next', label: 'Next Due', description: 'Date string', type: 'date' },
+  { id: 'schedule.last', label: 'Last Done', description: 'Date string', type: 'date' },
 ];
 
 export const getMappings = () => DB_CACHE.mappings;
@@ -377,6 +415,10 @@ export const saveFieldMapping = async (mapping: FieldMapping) => {
 export const deleteFieldMapping = async (id: string) => {
   DB_CACHE.mappings = DB_CACHE.mappings.filter(m => m.MappingID !== id);
   return runServer('deleteMapping', id);
+};
+
+export const addColumnToSheet = async (sheet: string, header: string) => {
+  return runServer('addColumn', sheet, header);
 };
 
 // 3. Prepopulation Logic
