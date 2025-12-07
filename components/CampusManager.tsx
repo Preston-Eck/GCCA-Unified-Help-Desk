@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Campus } from '../types';
 import { getCampuses, saveCampus, deleteCampus } from '../services/dataService';
-import { Map, Phone, MapPin, Plus, Save, Trash2, X } from 'lucide-react';
+import { Map as MapIcon, Phone, MapPin, Plus, Save, Trash2, X } from 'lucide-react';
 
 interface Props {
   user: any; // Passed for permission checks if needed later
@@ -61,7 +61,7 @@ const CampusManager: React.FC<Props> = () => {
               </div>
               {campus.MapURL && (
                 <div className="flex items-center gap-2 text-blue-600">
-                  <Map className="w-4 h-4" />
+                  <MapIcon className="w-4 h-4" />
                   <a href={campus.MapURL} target="_blank" rel="noreferrer" className="hover:underline">View Map</a>
                 </div>
               )}

@@ -336,3 +336,42 @@ function addColumn(sheetName, headerName) {
   sheet.getRange(1, lastCol + 1).setValue(headerName);
   return { success: true };
 }
+/* =========================================
+   DEBUG TOOL: EXPORT DB TO CSV
+   ========================================= */
+
+function emailDatabaseExport() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  const blobs = [];
+  
+  // 1. Convert each sheet to CSV
+  sheets.forEach(sheet => {
+    const name = sheet.getName();
+    const data = sheet.getDataRange().getValues();
+    
+    // Convert 2D array to CSV string
+    const csvString = data.map(row => 
+      row.map(cell => {
+        let cellStr = String(cell).replace(/"/g, '""'); // Escape double quotes
+        if (cellStr.search(/("|,|\n)/g) >= 0) cellStr = `"${cellStr}"`; // Quote if needed
+        return cellStr;
+      }).join(",")
+    ).join("\n");
+    
+    blobs.push(Utilities.newBlob(csvString, 'text/csv', `${name}.csv`));
+  });
+  
+  // 2. Zip and Email
+  const zip = Utilities.zip(blobs, 'GCCA_Database_Export.zip');
+  const recipient = Session.getActiveUser().getEmail();
+  
+  MailApp.sendEmail({
+    to: recipient,
+    subject: "GCCA Database CSV Export",
+    body: "Attached is the full export of your spreadsheet tables for column review.",
+    attachments: [zip]
+  });
+  
+  return "Sent export to " + recipient;
+}
