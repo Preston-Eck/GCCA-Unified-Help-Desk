@@ -1,13 +1,11 @@
-// types.ts
-
 // --- 1. CORE CONFIGURATION ---
 export interface SiteConfig {
   appName: string;
   unauthorizedMessage: string;
   supportContact: string;
   announcementBanner: string;
-  ticketCategories: string[];
-  priorities: string[];
+  ticketCategories: string[]; 
+  priorities: string[];       
 }
 
 // --- 2. USERS & PROFILES ---
@@ -15,9 +13,9 @@ export interface User {
   UserID: string;
   Email: string;
   Name: string;
-  User_Type: string;
-  Department: string;
-  // Expanded Profile
+  User_Type: string; // Comma-separated (e.g. "Admin, Tech")
+  Department: string; // Comma-separated
+  // Extended Profile Fields (from CSV)
   Primary_Building?: string;
   Primary_Room?: string;
   Grades_Taught?: string;
@@ -79,9 +77,9 @@ export interface Asset {
   Warranty_Expires?: string;
   Last_Known_Meter_Reading?: number;
   Last_Meter_Reading_Date?: string;
-  Parent_AssetID_Ref?: string;
-  Model_Number?: string;
-  InstallDate?: string;
+  Parent_AssetID_Ref?: string; 
+  Model_Number?: string;       
+  InstallDate?: string;        
 }
 
 export interface MeterReading {
@@ -121,7 +119,7 @@ export interface Ticket {
   Title: string;
   Description: string;
   Category: string;
-  Status: string; // Using string to allow flexibility, but usually TicketStatus
+  Status: string; 
   Priority?: string;
   Assigned_Staff?: string;
   Assigned_VendorID_Ref?: string;
@@ -176,11 +174,23 @@ export interface Material {
   Material_Name: string;
   Category: string;
   Location: string;
-  Purchase_Unit_Name: string;
+  Purchase_Unit_Name: string; 
   Purchase_Unit_Cost: number;
   Items_per_Unit: number;
   Quantity_on_Hand: number;
   Reorder_Point: number;
+}
+
+export interface MaterialTransaction {
+  UsedID: string;
+  TicketID_Ref?: string;
+  TaskID_Ref?: string;
+  AssetID_Ref?: string;
+  LocationID_Ref?: string;
+  MaterialID_Ref: string;
+  Quantity_Used: number;
+  Timestamp: string;
+  Logged_By_Ref: string;
 }
 
 export interface PurchaseLog {
@@ -190,12 +200,15 @@ export interface PurchaseLog {
   VendorID_Ref: string;
   Quantity_Purchased: number;
   Total_Cost_for_Item: number;
+  Receipt_Type?: string;
+  Receipt_Image?: string;
+  Receipt_File?: string;
 }
 
 // --- 7. VENDORS & PROCUREMENT ---
 export interface Vendor {
   VendorID: string;
-  Vendor_Name: string;
+  Vendor_Name: string; 
   Specialty?: string;
   Contact_Person?: string;
   Phone?: string;
@@ -211,7 +224,7 @@ export interface VendorBid {
   BidID: string;
   TicketID_Ref: string;
   VendorID_Ref: string;
-  VendorName?: string;
+  VendorName?: string; 
   Amount: number;
   Notes: string;
   DateSubmitted: string;
@@ -223,7 +236,7 @@ export interface VendorReview {
   VendorID_Ref: string;
   TicketID_Ref: string;
   Author_Email: string;
-  Rating: number;
+  Rating: number; 
   Comment: string;
   Timestamp: string;
 }
@@ -264,7 +277,7 @@ export interface Document {
   Upload_Date: string;
 }
 
-// --- 9. PERMISSIONS ---
+// --- 9. PERMISSIONS (GRANULAR) ---
 export type Permission = 
   | 'VIEW_DASHBOARD' | 'VIEW_ADMIN_PANEL'
   | 'TICKET_CREATE' | 'TICKET_READ_OWN' | 'TICKET_READ_DEPT' | 'TICKET_READ_ALL' | 'TICKET_UPDATE_OWN' | 'TICKET_UPDATE_ALL' | 'TICKET_DELETE' | 'TICKET_ASSIGN' | 'TICKET_APPROVE' | 'TICKET_MERGE'

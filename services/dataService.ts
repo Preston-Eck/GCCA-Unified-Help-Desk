@@ -4,7 +4,7 @@ import * as T from '../types';
 const runServer = (fn: string, ...args: any[]): Promise<any> => {
   return new Promise((resolve, reject) => {
     // @ts-ignore
-    if (typeof google === 'undefined') { console.warn("Mock call:", fn); resolve(null); return; }
+    if (typeof google === 'undefined') { resolve(null); return; }
     // @ts-ignore
     window.google.script.run
       .withSuccessHandler((r: any) => resolve(typeof r === 'string' ? JSON.parse(r) : r))
@@ -68,7 +68,6 @@ export const initDatabase = async () => {
     DB_CACHE.mappings = data.MAPPINGS || [];
     if (data.CONFIG) DB_CACHE.config = data.CONFIG;
     
-    // Ticket Comments & Attachments
     DB_CACHE.ticketAttachments = data.TICKET_ATTACHMENTS || data.ATTACHMENTS || [];
     DB_CACHE.bids = data.BIDS || [];
     DB_CACHE.reviews = data.REVIEWS || [];
@@ -83,7 +82,7 @@ export const initDatabase = async () => {
 // --- GETTERS ---
 export const getUsers = () => DB_CACHE.users;
 export const getTickets = () => DB_CACHE.tickets;
-export const getTicketsForUser = (user: T.User) => DB_CACHE.tickets; // Component does filtering
+export const getTicketsForUser = (user: T.User) => DB_CACHE.tickets; 
 export const getTasks = (ticketId?: string) => ticketId ? DB_CACHE.tasks.filter(t => t.TicketID_Ref === ticketId) : DB_CACHE.tasks;
 export const getInventory = () => DB_CACHE.materials;
 export const getAssets = (locId?: string) => locId ? DB_CACHE.assets.filter(a => a.LocationID_Ref === locId) : DB_CACHE.assets;
@@ -96,8 +95,8 @@ export const getMappings = () => DB_CACHE.mappings;
 export const getAppConfig = () => DB_CACHE.config;
 export const getAllMaintenanceSchedules = () => DB_CACHE.schedules;
 export const getSOPs = () => DB_CACHE.sops;
-export const getAllSOPs = () => DB_CACHE.sops; // Alias
-export const getSOPsForAsset = (id: string) => DB_CACHE.sops; // Placeholder for linking logic
+export const getAllSOPs = () => DB_CACHE.sops; 
+export const getSOPsForAsset = (id: string) => DB_CACHE.sops; 
 export const getAccountRequests = () => DB_CACHE.accountRequests;
 export const getTechnicians = () => DB_CACHE.users.filter(u => u.User_Type.includes('Tech'));
 export const getTicketById = (id: string) => DB_CACHE.tickets.find(t => t.TicketID === id);
@@ -142,19 +141,8 @@ export const saveBuilding = (b: T.Building) => runServer('saveBuilding', b);
 export const deleteBuilding = (id: string) => runServer('deleteBuilding', id);
 export const saveLocation = (l: T.Location) => runServer('saveLocation', l);
 export const deleteLocation = (id: string) => runServer('deleteLocation', id);
-
-// --- MAPPING ACTIONS (The ones causing errors) ---
-export const saveFieldMapping = async (mapping: T.FieldMapping) => {
-  const newMapping = { ...mapping, MappingID: mapping.MappingID || `MAP-${Date.now()}` };
-  const idx = DB_CACHE.mappings.findIndex(m => m.MappingID === newMapping.MappingID);
-  if (idx >= 0) DB_CACHE.mappings[idx] = newMapping;
-  else DB_CACHE.mappings.push(newMapping);
-  return runServer('saveMapping', newMapping);
-};
-export const deleteFieldMapping = (id: string) => {
-  DB_CACHE.mappings = DB_CACHE.mappings.filter(m => m.MappingID !== id);
-  return runServer('deleteMapping', id);
-};
+export const saveMapping = (m: T.FieldMapping) => runServer('saveMapping', m);
+export const deleteFieldMapping = (id: string) => runServer('deleteMapping', id);
 
 export const fetchSchema = async () => {
   const schema = await runServer('getSchema');
@@ -215,10 +203,15 @@ export const uploadFile = async (file: File, ticketId: string) => {
 export const hasPermission = (user: T.User, perm: string): boolean => {
   if (!user) return false;
   if (user.User_Type?.includes('Admin') || user.User_Type?.includes('Chair')) return true;
-  return true; 
+  const userRoles = user.User_Type.split(',').map(r => r.trim());
+  for (const roleName of userRoles) {
+    const def = DB_CACHE.roles.find(r => r.RoleName === roleName);
+    if (def && def.Permissions.includes(perm as T.Permission)) return true;
+  }
+  return false;
 };
 
-// --- MASTER LIST OF APP FIELDS ---
+// --- APP FIELDS ---
 export const APP_FIELDS: T.AppField[] = [
   // TICKETS
   { id: 'ticket.id', category: 'Ticket', label: 'Ticket ID', description: 'T-XXXX', type: 'text' },

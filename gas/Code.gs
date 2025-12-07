@@ -166,7 +166,7 @@ function saveSOP(d) { return saveData('SOPS', 'SOP_ID', d); }
 function saveSchedule(d) { return saveData('SCHEDULES', 'PM_ID', d); }
 function saveMapping(d) { return saveData('MAPPINGS', 'MappingID', d); }
 function deleteMapping(id) { return deleteData('MAPPINGS', 'MappingID', id); }
-function updateConfig(d) { return saveData('CONFIG', 'appName', d); } // Config hack
+function updateConfig(d) { return saveData('CONFIG', 'appName', d); } 
 function addColumn(sheet, header) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const s = ss.getSheetByName(sheet);
@@ -174,13 +174,17 @@ function addColumn(sheet, header) {
   return {success: true};
 }
 
-// Schema Fetcher
 function getSchema() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const data = getDatabaseData();
   const schema = {};
-  Object.keys(TABS).forEach(key => {
-    const sheet = ss.getSheetByName(TABS[key]);
-    schema[TABS[key]] = sheet ? sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0] : [];
+  Object.keys(data).forEach(k => {
+    if (data[k].length > 0) {
+      schema[k] = Object.keys(data[k][0]);
+    } else {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sheet = ss.getSheetByName(TABS[k]);
+      schema[k] = sheet ? sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0] : [];
+    }
   });
   return schema;
 }
@@ -218,7 +222,7 @@ function uploadFile(data, filename, mimeType, parentId) {
     const folder = DriveApp.getFolderById(SCRIPT_PROP.getProperty('DRIVE_FOLDER_ID'));
     const blob = Utilities.newBlob(Utilities.base64Decode(data), mimeType, filename);
     const file = folder.createFile(blob);
-    saveData('ATTACHMENTS', 'AttachmentID', {
+    saveData('TICKET_ATTACHMENTS', 'AttachmentID', {
       AttachmentID: 'ATT-' + Date.now(), TicketID_Ref: parentId,
       File_Name: filename, Drive_URL: file.getUrl(), Mime_Type: mimeType
     });
@@ -249,33 +253,24 @@ function updateSchema() {
     'Campus Map': 'Campus_Map',
     'Next Due Date': 'Next_Due_Date',
     'Building Floor Plan': 'Building_Floor_Plan',
-    'Building Cover Photo': 'Building_Cover_Photo'
+    'Building Cover Photo': 'Building_Cover_Photo',
+    'Quantity on Hand': 'Quantity_on_Hand',
+    'Reorder Point': 'Reorder_Point',
+    'Purchase Unit Cost': 'Purchase_Unit_Cost',
+    'Items per Unit': 'Items_per_Unit'
   };
   
   const sheets = ss.getSheets();
   sheets.forEach(sheet => {
     const lastCol = sheet.getLastColumn();
-    // FIX: Skip empty sheets to prevent crash
-    if (lastCol < 1) {
-      console.log(`Skipping empty sheet: ${sheet.getName()}`);
-      return;
-    }
+    if (lastCol < 1) return; // Skip empty
 
     const range = sheet.getRange(1, 1, 1, lastCol);
     const headers = range.getValues()[0];
     let changed = false;
 
     const newHeaders = headers.map(h => {
-      // 1. Apply specific renames
-      if (renames[h]) {
-        changed = true;
-        return renames[h];
-      }
-      // 2. Auto-fix spaces to underscores (optional, safer for code)
-      if (h.includes(' ')) {
-        // Uncomment next line if you want to auto-fix ALL spaces
-        // changed = true; return h.replace(/ /g, '_'); 
-      }
+      if (renames[h]) { changed = true; return renames[h]; }
       return h;
     });
     

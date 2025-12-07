@@ -1,16 +1,18 @@
-
-
 import React, { useState, useEffect } from 'react';
-import { getRoles, saveRole, deleteRole } from '../services/dataService';
 import { RoleDefinition, Permission } from '../types';
-import { Shield, Plus, Save, Trash2, CheckSquare, Square, X } from 'lucide-react';
+import { getRoles, saveRole, deleteRole } from '../services/dataService';
+import { Shield, Plus, Save, Trash2, CheckSquare } from 'lucide-react';
 
-const AVAILABLE_PERMISSIONS: Permission[] = [
-  'VIEW_DASHBOARD', 'SUBMIT_TICKETS', 'VIEW_MY_TICKETS', 'VIEW_DEPT_TICKETS',
-  'VIEW_CAMPUS_TICKETS', 'VIEW_ALL_BIDS', 'MANAGE_ASSETS', 'MANAGE_USERS',
-  'MANAGE_VENDORS', 'MANAGE_ROLES', 'MANAGE_SETTINGS', 'MANAGE_SOPS', 'MANAGE_SCHEDULES',
-  'ASSIGN_TICKETS', 'APPROVE_TICKETS', 'CLAIM_TICKETS', 'MERGE_TICKETS'
-];
+const PERMISSION_GROUPS = {
+  'Tickets': ['TICKET_CREATE', 'TICKET_READ_OWN', 'TICKET_READ_DEPT', 'TICKET_READ_ALL', 'TICKET_UPDATE_OWN', 'TICKET_UPDATE_ALL', 'TICKET_DELETE', 'TICKET_ASSIGN', 'TICKET_APPROVE', 'TICKET_MERGE'],
+  'Tasks': ['TASK_CREATE', 'TASK_UPDATE', 'TASK_DELETE'],
+  'Assets': ['ASSET_READ', 'ASSET_CREATE', 'ASSET_UPDATE', 'ASSET_DELETE'],
+  'Inventory': ['INVENTORY_READ', 'INVENTORY_ADJUST', 'INVENTORY_PURCHASE'],
+  'Vendors': ['VENDOR_READ', 'VENDOR_MANAGE', 'VENDOR_APPROVE'],
+  'People': ['USER_READ', 'USER_MANAGE', 'ROLE_MANAGE'],
+  'Docs & SOPs': ['SOP_READ', 'SOP_MANAGE', 'DOC_MANAGE'],
+  'System': ['VIEW_DASHBOARD', 'VIEW_ADMIN_PANEL']
+};
 
 const RoleManager: React.FC = () => {
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
@@ -22,10 +24,10 @@ const RoleManager: React.FC = () => {
     setRoles(getRoles());
   }, []);
 
-  const handleSelectRole = (role: RoleDefinition) => {
+  const handleSelect = (role: RoleDefinition) => {
     setSelectedRole(role);
     setEditForm({ ...role });
-    setIsEditing(false); // View mode first
+    setIsEditing(false);
   };
 
   const handleCreate = () => {
@@ -36,19 +38,16 @@ const RoleManager: React.FC = () => {
   };
 
   const handleSave = () => {
-    if (!editForm.RoleName) return;
-    saveRole(editForm);
-    setRoles(getRoles()); // Refresh
-    setSelectedRole(editForm);
-    setIsEditing(false);
+    if (editForm.RoleName) {
+      saveRole(editForm);
+      setRoles(getRoles()); // Reload from cache
+      setSelectedRole(editForm);
+      setIsEditing(false);
+    }
   };
 
   const handleDelete = (roleName: string) => {
-    if (roleName === 'Super Admin') {
-      alert("Cannot delete the Super Admin role.");
-      return;
-    }
-    if (confirm(`Delete role "${roleName}"? This may affect users assigned to this role.`)) {
+    if (confirm(`Delete role "${roleName}"?`)) {
       deleteRole(roleName);
       setRoles(getRoles());
       setSelectedRole(null);
@@ -57,15 +56,14 @@ const RoleManager: React.FC = () => {
 
   const togglePermission = (perm: Permission) => {
     const current = editForm.Permissions;
-    if (current.includes(perm)) {
-      setEditForm({ ...editForm, Permissions: current.filter(p => p !== perm) });
-    } else {
-      setEditForm({ ...editForm, Permissions: [...current, perm] });
-    }
+    const updated = current.includes(perm) 
+      ? current.filter(p => p !== perm) 
+      : [...current, perm];
+    setEditForm({ ...editForm, Permissions: updated });
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden h-[calc(100vh-140px)] flex flex-col md:flex-row">
+    <div className="bg-white rounded-lg shadow-md border border-gray-200 h-[calc(100vh-140px)] flex flex-col md:flex-row overflow-hidden">
       
       {/* Sidebar List */}
       <div className="w-full md:w-64 border-r border-gray-200 bg-gray-50 flex flex-col">
@@ -81,7 +79,7 @@ const RoleManager: React.FC = () => {
           {roles.map(r => (
             <button
               key={r.RoleName}
-              onClick={() => handleSelectRole(r)}
+              onClick={() => handleSelect(r)}
               className={`w-full text-left px-3 py-2 rounded text-sm font-medium flex justify-between items-center ${
                 selectedRole?.RoleName === r.RoleName || (isEditing && editForm.RoleName === r.RoleName)
                   ? 'bg-white shadow border border-gray-200 text-[#355E3B]' 
@@ -95,25 +93,25 @@ const RoleManager: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col bg-white">
         {(selectedRole || isEditing) ? (
           <>
-            <div className="p-6 border-b border-gray-200 flex justify-between items-start bg-white">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-start bg-gray-50">
               <div className="flex-1">
                 {isEditing ? (
                   <div className="space-y-3 max-w-md">
-                     <input 
-                       className="text-2xl font-bold text-gray-900 border-b border-gray-300 w-full focus:outline-none focus:border-[#355E3B]"
-                       value={editForm.RoleName}
-                       onChange={e => setEditForm({...editForm, RoleName: e.target.value})}
-                       placeholder="Role Name"
-                     />
-                     <input 
-                       className="text-sm text-gray-600 border-b border-gray-300 w-full focus:outline-none focus:border-[#355E3B]"
-                       value={editForm.Description}
-                       onChange={e => setEditForm({...editForm, Description: e.target.value})}
-                       placeholder="Role Description"
-                     />
+                    <input 
+                      className="text-2xl font-bold text-gray-900 border-b border-gray-300 w-full focus:outline-none focus:border-[#355E3B] bg-transparent"
+                      value={editForm.RoleName}
+                      onChange={e => setEditForm({ ...editForm, RoleName: e.target.value })}
+                      placeholder="Role Name"
+                    />
+                    <input 
+                      className="text-sm text-gray-600 border-b border-gray-300 w-full focus:outline-none focus:border-[#355E3B] bg-transparent"
+                      value={editForm.Description}
+                      onChange={e => setEditForm({ ...editForm, Description: e.target.value })}
+                      placeholder="Role Description"
+                    />
                   </div>
                 ) : (
                   <div>
@@ -122,53 +120,57 @@ const RoleManager: React.FC = () => {
                   </div>
                 )}
               </div>
-
               <div className="flex gap-2">
-                 {isEditing ? (
-                   <>
-                     <button onClick={handleSave} className="bg-[#355E3B] text-white px-4 py-2 rounded font-bold flex items-center gap-2 hover:bg-green-800">
-                       <Save className="w-4 h-4" /> Save Role
-                     </button>
-                     <button onClick={() => { setIsEditing(false); setSelectedRole(roles.find(r => r.RoleName === editForm.RoleName) || null); }} className="border border-gray-300 px-3 py-2 rounded text-gray-600 hover:bg-gray-50">
-                       Cancel
-                     </button>
-                   </>
-                 ) : (
-                   <>
-                     <button onClick={() => { setEditForm(selectedRole!); setIsEditing(true); }} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded font-bold hover:bg-indigo-100">
-                       Edit Permissions
-                     </button>
-                     <button onClick={() => handleDelete(selectedRole!.RoleName)} className="text-red-600 px-3 py-2 rounded hover:bg-red-50">
-                       <Trash2 className="w-5 h-5" />
-                     </button>
-                   </>
-                 )}
+                {isEditing ? (
+                  <>
+                    <button onClick={handleSave} className="bg-[#355E3B] text-white px-4 py-2 rounded font-bold flex items-center gap-2 hover:bg-green-800">
+                      <Save className="w-4 h-4" /> Save Role
+                    </button>
+                    <button onClick={() => { setIsEditing(false); setSelectedRole(roles.find(r => r.RoleName === editForm.RoleName) || null); }} className="border border-gray-300 px-3 py-2 rounded text-gray-600 hover:bg-gray-100">
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => { setEditForm(selectedRole!); setIsEditing(true); }} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded font-bold hover:bg-indigo-100">
+                      Edit Permissions
+                    </button>
+                    <button onClick={() => handleDelete(selectedRole!.RoleName)} className="text-red-600 px-3 py-2 rounded hover:bg-red-50">
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1 bg-gray-50">
-              <h3 className="text-sm font-bold text-gray-500 uppercase mb-4">Permissions</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {AVAILABLE_PERMISSIONS.map(perm => {
-                  const isChecked = editForm.Permissions.includes(perm);
-                  return (
-                    <div 
-                      key={perm}
-                      onClick={() => isEditing && togglePermission(perm)}
-                      className={`p-3 rounded border flex items-center gap-3 transition-colors ${
-                        isEditing ? 'cursor-pointer hover:border-[#355E3B]' : 'opacity-80'
-                      } ${isChecked ? 'bg-white border-green-200' : 'bg-gray-100 border-gray-200'}`}
-                    >
-                      <div className={`${isChecked ? 'text-[#355E3B]' : 'text-gray-400'}`}>
-                        {isChecked ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
-                      </div>
-                      <span className={`text-sm font-medium ${isChecked ? 'text-gray-900' : 'text-gray-500'}`}>
-                        {perm.replace(/_/g, ' ')}
-                      </span>
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Object.entries(PERMISSION_GROUPS).map(([group, perms]) => (
+                  <div key={group} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-100 px-4 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      {group}
                     </div>
-                  );
-                })}
+                    <div className="p-2 space-y-1">
+                      {perms.map((perm) => {
+                        const isActive = editForm.Permissions.includes(perm as Permission);
+                        return (
+                          <div 
+                            key={perm} 
+                            onClick={() => isEditing && togglePermission(perm as Permission)}
+                            className={`flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors ${
+                              isEditing ? 'cursor-pointer hover:bg-gray-50' : ''
+                            } ${isActive ? 'bg-green-50 text-green-900' : 'text-gray-500'}`}
+                          >
+                            <div className={`w-4 h-4 border rounded flex items-center justify-center ${isActive ? 'bg-[#355E3B] border-[#355E3B]' : 'border-gray-300'}`}>
+                              {isActive && <CheckSquare className="w-3 h-3 text-white" />}
+                            </div>
+                            <span className={isActive ? 'font-medium' : ''}>{perm.replace(/_/g, ' ')}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </>
