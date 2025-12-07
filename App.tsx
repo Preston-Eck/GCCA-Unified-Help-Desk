@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User } from './types';
 import { getSessionUserEmail } from './services/api';
-import { initDatabase, getUsers } from './services/dataService';
-import { Loader2, Users, Shield, Database, Briefcase, Settings, Calendar, LogOut } from 'lucide-react';
+import { initDatabase, getUsers, hasPermission } from './services/dataService';
+import { Loader2, Users, Shield, Database, Briefcase, Settings, Calendar, LogOut, Map, Package } from 'lucide-react';
 
 // Components
 import TicketForm from './components/TicketForm';
@@ -16,8 +16,7 @@ import RoleManager from './components/RoleManager';
 import UserManager from './components/UserManager';
 import VendorManager from './components/VendorManager';
 import CampusManager from './components/CampusManager';
-import MappingDashboard from './components/MappingDashboard';
-
+// import InventoryManager from './components/InventoryManager'; // Uncomment if file exists
 
 // --- CONFIG ---
 const SUPER_ADMIN_EMAIL = 'preston@grovecitychristianacademy.com';
@@ -31,39 +30,24 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [allUsers, setAllUsers] = useState<User[]>([]);
 
-  // 1. INITIAL LOAD & AUTH
   useEffect(() => {
     const init = async () => {
       try {
-        // 1. Initialize Database
         await initDatabase();
         const users = getUsers();
         setAllUsers(users);
 
-        // 2. Try to get Email from Google (Primary Method)
         let email = await getSessionUserEmail();
-        
-        // 3. FALLBACK: Check Local Storage if Google blocked us
         if (!email || email === '') {
            const storedEmail = localStorage.getItem(STORAGE_KEY);
-           if (storedEmail) {
-             console.log("Restoring session from local storage:", storedEmail);
-             email = storedEmail;
-           }
+           if (storedEmail) email = storedEmail;
         }
         
-        // 4. LOGIC: Attempt Login
         if (email && email !== '') {
            setRealUserEmail(email);
-           // Case insensitive match
            const foundUser = users.find((u: User) => u.Email.toLowerCase() === email.toLowerCase());
-           if (foundUser) {
-             setCurrentUser(foundUser);
-           }
-        } else {
-           console.warn("Auto-login blocked or failed. Fallback to manual login.");
+           if (foundUser) setCurrentUser(foundUser);
         }
-
       } catch (err) {
         console.error("Init failed:", err);
       } finally {
@@ -73,31 +57,25 @@ export default function App() {
     init();
   }, [refreshKey]);
 
-  // --- MANUAL LOGIN HANDLER ---
   const handleManualLogin = (email: string) => {
     const user = allUsers.find(u => u.Email.toLowerCase() === email.toLowerCase());
     if (user) {
-      // SUCCESS: Save to storage for next time
       localStorage.setItem(STORAGE_KEY, email);
-      
       setRealUserEmail(email);
       setCurrentUser(user);
     } else {
-      // Valid email but not in DB -> Access Denied (don't save session)
       setRealUserEmail(email);
       setCurrentUser(null); 
     }
   };
 
-  // --- LOGOUT HANDLER ---
   const handleLogout = () => {
-    localStorage.removeItem(STORAGE_KEY); // Clear saved session
+    localStorage.removeItem(STORAGE_KEY);
     setCurrentUser(null);
     setRealUserEmail('');
     window.location.reload();
   };
 
-  // 2. SUPER ADMIN MASQUERADE FUNCTION
   const handleRoleSwitch = (targetEmail: string) => {
     if (targetEmail === 'REAL_USER') {
        const me = allUsers.find(u => u.Email.toLowerCase() === realUserEmail.toLowerCase());
@@ -108,14 +86,9 @@ export default function App() {
     }
   };
 
-  const hasPermission = (permFragment: string) => {
-    if (!currentUser) return false;
-    return currentUser.User_Type.includes('Admin') || 
-           currentUser.User_Type.includes('Chair') || 
-           currentUser.User_Type.includes(permFragment);
-  };
+  // Helper to check permissions cleanly
+  const check = (perm: any) => currentUser ? hasPermission(currentUser, perm) : false;
 
-  // 3. RENDER LOADING
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -127,15 +100,11 @@ export default function App() {
     );
   }
 
-  // 4. RENDER LOGIN LOGIC
   if (!currentUser) {
-    if (realUserEmail) {
-       return <AccessDenied userEmail={realUserEmail} />;
-    }
+    if (realUserEmail) return <AccessDenied userEmail={realUserEmail} />;
     return <LoginScreen onLogin={handleManualLogin} />;
   }
 
-  // 5. RENDER DASHBOARD (Logged In)
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col font-sans">
       {/* HEADER */}
@@ -147,7 +116,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* SUPER ADMIN DROPDOWN */}
             {realUserEmail.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() && (
               <div className="bg-yellow-500/20 p-1 rounded border border-yellow-500/50 flex items-center gap-2">
                 <Users className="w-4 h-4 text-yellow-200" />
@@ -173,12 +141,7 @@ export default function App() {
                 <div className="text-sm font-semibold">{currentUser.Name}</div>
                 <div className="text-xs text-gray-300 opacity-80">{currentUser.User_Type}</div>
               </div>
-              
-              <button 
-                onClick={handleLogout}
-                className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors text-white"
-                title="Sign Out"
-              >
+              <button onClick={handleLogout} className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors text-white" title="Sign Out">
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
@@ -188,73 +151,76 @@ export default function App() {
 
       {/* BODY CONTENT */}
       <main className="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
-        
-        {/* NAVIGATION TABS */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
            <button onClick={() => setView('dashboard')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'dashboard' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
              Dashboard
            </button>
            
-           {hasPermission('SUBMIT') && (
+           {check('SUBMIT_TICKETS') && (
              <button onClick={() => setView('form')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'form' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
                New Ticket
              </button>
            )}
 
-           {hasPermission('ASSETS') && (
-             <button onClick={() => setView('assets')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'assets' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
-               <Database className="w-4 h-4" /> Assets
+           {check('MANAGE_ASSETS') && (
+             <>
+                <button onClick={() => setView('assets')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'assets' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
+                  <Database className="w-4 h-4" /> Assets
+                </button>
+                <button onClick={() => setView('campuses')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'campuses' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
+                  <Map className="w-4 h-4" /> Campuses
+                </button>
+             </>
+           )}
+
+           {check('INVENTORY_READ') && (
+             <button onClick={() => setView('inventory')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'inventory' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
+               <Package className="w-4 h-4" /> Inventory
              </button>
            )}
 
-           {(hasPermission('SOPS') || hasPermission('SCHEDULES')) && (
+           {(check('MANAGE_SOPS') || check('MANAGE_SCHEDULES')) && (
              <button onClick={() => setView('operations')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'operations' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
                <Calendar className="w-4 h-4" /> Operations
              </button>
            )}
 
-           {hasPermission('USERS') && (
+           {check('MANAGE_USERS') && (
              <button onClick={() => setView('users')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'users' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
                <Users className="w-4 h-4" /> Users
              </button>
            )}
 
-           {hasPermission('VENDORS') && (
+           {check('MANAGE_VENDORS') && (
              <button onClick={() => setView('vendors')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'vendors' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
                <Briefcase className="w-4 h-4" /> Vendors
              </button>
            )}
 
-           {hasPermission('ROLES') && (
+           {check('MANAGE_ROLES') && (
              <button onClick={() => setView('roles')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'roles' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
                <Shield className="w-4 h-4" /> Roles
              </button>
            )}
 
-           {hasPermission('SETTINGS') && (
+           {check('MANAGE_SETTINGS') && (
              <button onClick={() => setView('admin')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'admin' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
                <Settings className="w-4 h-4" /> Settings
              </button>
            )}
-           {hasPermission('MANAGE_ASSETS') && (
-             <button onClick={() => setView('campuses')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'campuses' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
-               <Map className="w-4 h-4" /> Campuses
-             </button>
-           )}
         </div>
 
-        {/* VIEW ROUTING */}
         <div className="animate-in fade-in duration-300">
           {view === 'dashboard' && <TicketDashboard user={currentUser} refreshKey={refreshKey} onRefresh={() => setRefreshKey(k => k + 1)} />}
           {view === 'form' && <TicketForm userEmail={currentUser.Email} onSuccess={() => setView('dashboard')} />}
           {view === 'assets' && <AssetManager user={currentUser} />}
+          {view === 'campuses' && <CampusManager user={currentUser} />}
+          {/* {view === 'inventory' && <InventoryManager />} */} 
           {view === 'operations' && <OperationsDashboard user={currentUser} />}
           {view === 'users' && <UserManager currentUser={currentUser} />}
           {view === 'vendors' && <VendorManager />} 
           {view === 'roles' && <RoleManager />}
           {view === 'admin' && <AdminPanel onSuccess={() => setRefreshKey(k => k + 1)} />}
-          {view === 'campuses' && <CampusManager user={currentUser} />}
-          {view === 'mapping' && <MappingDashboard />}
         </div>
       </main>
     </div>
