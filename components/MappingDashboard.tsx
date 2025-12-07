@@ -1,17 +1,117 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchSchema, getMappings, saveFieldMapping, deleteFieldMapping, addColumnToSheet, APP_FIELDS } from '../services/dataService';
 import { FieldMapping } from '../types';
-import { Database, ArrowRight, RefreshCw, Trash2, Plus, AlertCircle, Wand2, FileSpreadsheet, LayoutGrid } from 'lucide-react';
+import { Database, ArrowRight, RefreshCw, Trash2, Plus, AlertCircle, Wand2, FileSpreadsheet, LayoutGrid, Lock, AlertTriangle } from 'lucide-react';
 
+// --- SUB-COMPONENT: Single Mapping Row ---
+const MappingRow: React.FC<{
+  map: FieldMapping;
+  allColumns: string[];
+  usedColumns: Set<string>;
+  usedFields: Set<string>;
+  onUpdate: (m: FieldMapping, field: keyof FieldMapping, val: string) => void;
+  onDelete: (id: string) => void;
+}> = ({ map, allColumns, usedColumns, usedFields, onUpdate, onDelete }) => {
+  // Local state for the category filter prevents the "Locked Dropdown" issue
+  const [categoryFilter, setCategoryFilter] = useState<string>(map.AppFieldID.split('.')[0]);
+
+  // Calculate available fields for this specific row
+  const availableAppFields = useMemo(() => {
+    return APP_FIELDS.filter(f => 
+      // 1. Match selected category
+      (f.id.startsWith(categoryFilter + '.') || categoryFilter === 'All') &&
+      // 2. Hide fields used by OTHER rows (but keep the one currently selected in this row)
+      (!usedFields.has(f.id) || f.id === map.AppFieldID)
+    );
+  }, [categoryFilter, usedFields, map.AppFieldID]);
+
+  // Calculate available columns
+  const availableColumns = useMemo(() => {
+    return allColumns.filter(c => !usedColumns.has(c) || c === map.SheetHeader);
+  }, [allColumns, usedColumns, map.SheetHeader]);
+
+  // Categories list
+  const categories = useMemo(() => ['All', ...Array.from(new Set(APP_FIELDS.map(f => f.id.split('.')[0])))], []);
+
+  // Safety Check: Is this a critical system field?
+  const isCritical = ['ticket.id', 'ticket.comments', 'user.email'].includes(map.AppFieldID);
+
+  return (
+    <div className="flex items-start gap-3 p-3 bg-gray-50 border border-gray-200 rounded text-sm group hover:border-[#355E3B] transition-colors">
+      
+      {/* 1. Spreadsheet Column */}
+      <div className="flex-1">
+        <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Spreadsheet Column</div>
+        <select 
+          value={map.SheetHeader}
+          onChange={(e) => onUpdate(map, 'SheetHeader', e.target.value)}
+          className="w-full border-gray-300 rounded p-1.5 text-sm focus:ring-[#355E3B]"
+        >
+          {/* Always include current value even if "used" elsewhere to prevent UI glitch */}
+          <option value={map.SheetHeader}>{map.SheetHeader}</option>
+          {availableColumns.filter(c => c !== map.SheetHeader).map(h => (
+            <option key={h} value={h}>{h}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="pt-7"><ArrowRight className="w-4 h-4 text-gray-300" /></div>
+
+      {/* 2. App Field Selection */}
+      <div className="flex-[2]">
+          <div className="text-[10px] font-bold text-gray-400 uppercase mb-1 flex justify-between">
+            <span>Maps To App Field</span>
+            {isCritical && <span className="text-amber-600 flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> System Critical</span>}
+          </div>
+          <div className="flex gap-2">
+            {/* Category Filter */}
+            <select 
+              className="w-1/3 border-gray-300 rounded p-1.5 text-xs bg-white text-gray-600 focus:ring-[#355E3B]"
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              value={categoryFilter}
+            >
+                {categories.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+            </select>
+
+            {/* Field Selector */}
+            <select 
+              value={map.AppFieldID}
+              onChange={(e) => {
+                if (isCritical && !confirm("Warning: Changing this critical field mapping may break app functionality. Are you sure?")) return;
+                onUpdate(map, 'AppFieldID', e.target.value);
+              }}
+              className={`flex-1 border-gray-300 rounded p-1.5 text-sm font-medium text-gray-900 focus:ring-[#355E3B] ${isCritical ? 'bg-amber-50' : ''}`}
+            >
+              {availableAppFields.map(f => (
+                <option key={f.id} value={f.id}>{f.label}</option>
+              ))}
+              {/* Fallback for unlisted fields */}
+              {!APP_FIELDS.find(f => f.id === map.AppFieldID) && <option value={map.AppFieldID}>{map.AppFieldID} (Unknown)</option>}
+            </select>
+          </div>
+          
+          {/* Field Description Helper */}
+          <div className="text-[10px] text-gray-400 mt-1 pl-1">
+            {APP_FIELDS.find(f => f.id === map.AppFieldID)?.description}
+          </div>
+      </div>
+
+      {/* Delete Button */}
+      <button onClick={() => onDelete(map.MappingID)} className="pt-7 text-gray-400 hover:text-red-500">
+        {isCritical ? <Lock className="w-4 h-4 opacity-50" /> : <Trash2 className="w-4 h-4" />}
+      </button>
+    </div>
+  );
+};
+
+
+// --- MAIN COMPONENT ---
 const MappingDashboard: React.FC = () => {
   const [schema, setSchema] = useState<Record<string, string[]>>({});
   const [mappings, setMappings] = useState<FieldMapping[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<string>('');
-  
-  // Filter State
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
   const loadData = async () => {
     setLoading(true);
@@ -37,28 +137,23 @@ const MappingDashboard: React.FC = () => {
   const currentSheetColumns = schema[activeTab] || [];
   const currentMappings = mappings.filter(m => m.SheetName === activeTab);
   
-  // Which columns in the spreadsheet are NOT mapped?
-  const unmappedColumns = currentSheetColumns.filter(col => 
-    !currentMappings.some(m => m.SheetHeader === col)
-  );
+  // Sets for fast lookup in child components
+  const usedColumns = new Set(currentMappings.map(m => m.SheetHeader));
+  const usedFields = new Set(mappings.map(m => m.AppFieldID)); // Globally used fields (across all sheets? Usually 1:1 map is safer)
 
-  // Which App Fields are NOT mapped?
-  const unmappedAppFields = APP_FIELDS.filter(f => 
-    !mappings.some(m => m.AppFieldID === f.id)
-  );
-
-  // Categories derived from "ticket.title", "user.name" etc.
-  const categories = useMemo(() => {
-    const cats = new Set(APP_FIELDS.map(f => f.id.split('.')[0]));
-    return ['All', ...Array.from(cats)];
-  }, []);
+  // Reports
+  const unmappedColumns = currentSheetColumns.filter(col => !usedColumns.has(col));
+  const unmappedAppFields = APP_FIELDS.filter(f => !usedFields.has(f.id));
 
   const handleAddMapping = () => {
+    const nextUnusedField = unmappedAppFields[0]?.id || APP_FIELDS[0].id;
+    const nextUnusedCol = unmappedColumns[0] || '';
+
     saveFieldMapping({
       MappingID: '',
       SheetName: activeTab,
-      SheetHeader: unmappedColumns[0] || currentSheetColumns[0] || '',
-      AppFieldID: APP_FIELDS[0].id,
+      SheetHeader: nextUnusedCol,
+      AppFieldID: nextUnusedField,
       Description: ''
     }).then(loadData);
   };
@@ -70,30 +165,29 @@ const MappingDashboard: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    await deleteFieldMapping(id);
-    setMappings(prev => prev.filter(m => m.MappingID !== id));
+    if(confirm("Delete this mapping?")) {
+      await deleteFieldMapping(id);
+      setMappings(prev => prev.filter(m => m.MappingID !== id));
+    }
   };
 
   const handleAutoAddColumn = async (fieldId: string) => {
     const field = APP_FIELDS.find(f => f.id === fieldId);
     if (!field) return;
-    
-    // Suggest a header name (e.g., "ticket.title" -> "Title")
-    const suggestedHeader = field.label.replace(/ /g, '_');
+    const suggestedHeader = field.label.replace(/ /g, '_'); // "Ticket Title" -> "Ticket_Title"
     
     if (confirm(`Create new column "${suggestedHeader}" in sheet "${activeTab}"?`)) {
       setLoading(true);
       const res = await addColumnToSheet(activeTab, suggestedHeader);
       if (res && res.success) {
-        await loadData(); // Reload schema
-        // Auto-map it immediately
+        await loadData(); 
         await saveFieldMapping({
            MappingID: '',
            SheetName: activeTab,
            SheetHeader: suggestedHeader,
            AppFieldID: fieldId
         });
-        await loadData(); // Reload mappings
+        await loadData(); 
       } else {
         alert("Failed: " + (res?.message || "Unknown error"));
       }
@@ -102,13 +196,17 @@ const MappingDashboard: React.FC = () => {
   };
 
   const handleSmartMatch = () => {
-    // Simple fuzzy match on client side
     let matchCount = 0;
     unmappedColumns.forEach(col => {
-      const match = APP_FIELDS.find(f => 
-        f.label.toLowerCase() === col.toLowerCase().replace(/_/g, ' ') || 
-        f.id.split('.')[1] === col.toLowerCase()
-      );
+      // Normalize header: "Ticket_Title" -> "tickettitle"
+      const normCol = col.toLowerCase().replace(/[^a-z0-9]/g, '');
+      
+      const match = unmappedAppFields.find(f => {
+        const normLabel = f.label.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const normId = f.id.split('.')[1] || '';
+        return normLabel === normCol || normId === normCol || normCol.includes(normId);
+      });
+
       if (match) {
         saveFieldMapping({
           MappingID: '',
@@ -119,6 +217,7 @@ const MappingDashboard: React.FC = () => {
         matchCount++;
       }
     });
+
     if (matchCount > 0) {
       loadData();
       alert(`Auto-matched ${matchCount} fields!`);
@@ -185,52 +284,15 @@ const MappingDashboard: React.FC = () => {
             </div>
           ) : (
             currentMappings.map(map => (
-              <div key={map.MappingID} className="flex items-start gap-3 p-3 bg-gray-50 border border-gray-200 rounded text-sm group">
-                
-                {/* Spreadsheet Column */}
-                <div className="flex-1">
-                  <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Spreadsheet Column</div>
-                  <select 
-                    value={map.SheetHeader}
-                    onChange={(e) => handleUpdate(map, 'SheetHeader', e.target.value)}
-                    className="w-full border-gray-300 rounded p-1.5 text-sm focus:ring-[#355E3B]"
-                  >
-                    {currentSheetColumns.map(h => <option key={h} value={h}>{h}</option>)}
-                  </select>
-                </div>
-
-                <div className="pt-7"><ArrowRight className="w-4 h-4 text-gray-300" /></div>
-
-                {/* App Field - Grouped */}
-                <div className="flex-[1.5]">
-                   <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">App Field</div>
-                   <div className="flex gap-2">
-                      <select 
-                        className="w-1/3 border-gray-300 rounded p-1.5 text-xs bg-white text-gray-500"
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        value={map.AppFieldID.split('.')[0]}
-                      >
-                         {categories.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
-                      </select>
-                      <select 
-                        value={map.AppFieldID}
-                        onChange={(e) => handleUpdate(map, 'AppFieldID', e.target.value)}
-                        className="flex-1 border-gray-300 rounded p-1.5 text-sm font-medium text-gray-900 focus:ring-[#355E3B]"
-                      >
-                        {APP_FIELDS
-                          .filter(f => f.id.startsWith(map.AppFieldID.split('.')[0])) // Filter by selected cat logic
-                          .map(f => <option key={f.id} value={f.id}>{f.label}</option>)
-                        }
-                        {/* Fallback to show current if filter misses it */}
-                        {!APP_FIELDS.find(f => f.id === map.AppFieldID) && <option value={map.AppFieldID}>{map.AppFieldID}</option>}
-                      </select>
-                   </div>
-                </div>
-
-                <button onClick={() => handleDelete(map.MappingID)} className="pt-7 text-gray-400 hover:text-red-500">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+              <MappingRow 
+                key={map.MappingID}
+                map={map}
+                allColumns={currentSheetColumns}
+                usedColumns={usedColumns}
+                usedFields={usedFields}
+                onUpdate={handleUpdate}
+                onDelete={handleDelete}
+              />
             ))
           )}
         </div>
@@ -259,7 +321,7 @@ const MappingDashboard: React.FC = () => {
                       onClick={() => handleAutoAddColumn(f.id)}
                       className="mt-2 w-full text-[10px] bg-gray-50 hover:bg-[#355E3B] hover:text-white border border-gray-200 rounded py-1 transition-colors flex items-center justify-center gap-1"
                     >
-                      <Plus className="w-3 h-3" /> Create Column in {activeTab}
+                      <Plus className="w-3 h-3" /> Create Column
                     </button>
                  </div>
                ))
@@ -277,7 +339,7 @@ const MappingDashboard: React.FC = () => {
            </div>
            <div className="overflow-y-auto p-2 flex-1">
               <div className="flex flex-wrap gap-1">
-                {unmappedColumns.map(c => (
+                {unmappedColumns.length === 0 ? <span className="text-[10px] text-gray-400 p-2">None</span> : unmappedColumns.map(c => (
                   <span key={c} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-1 rounded border border-gray-200">
                     {c}
                   </span>
@@ -285,9 +347,7 @@ const MappingDashboard: React.FC = () => {
               </div>
            </div>
         </div>
-
       </div>
-
     </div>
   );
 };
