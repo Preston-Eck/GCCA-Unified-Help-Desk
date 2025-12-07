@@ -59,27 +59,32 @@ function getSessionUserEmail() {
 }
 
 function getDatabaseData() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const data = {};
-  
-  Object.keys(TABS).forEach(key => {
-    const sheetName = TABS[key];
-    const sheet = ss.getSheetByName(sheetName);
-    data[key] = sheet ? sheetToJson(sheet) : [];
-  });
-  
-  return data;
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const data = {};
+    
+    Object.keys(TABS).forEach(key => {
+      const sheetName = TABS[key];
+      const sheet = ss.getSheetByName(sheetName);
+      data[key] = sheet ? sheetToJson(sheet) : [];
+    });
+    
+    return data;
+  } catch (e) {
+    Logger.log("CRITICAL ERROR IN getDatabaseData: " + e.toString());
+    throw e;
+  }
 }
 
 /* =========================================
-   2. DATA HANDLERS
+   2. DATA HANDLERS (Robust & Safe)
    ========================================= */
 
 function sheetToJson(sheet) {
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return [];
   
-  // Clean Headers
+  // Clean Headers: Trim spaces
   const headers = values[0].map(h => String(h).trim());
   const data = values.slice(1);
   
@@ -88,8 +93,7 @@ function sheetToJson(sheet) {
     headers.forEach((h, i) => {
        if (!h) return;
        let val = row[i];
-       
-       // CRITICAL FIX: Convert Google Dates to Strings
+       // FIX: Convert Dates to Strings to prevent client.js crash
        if (val instanceof Date) {
          val = val.toISOString();
        }
@@ -109,7 +113,7 @@ function saveData(tabKey, idCol, dataObj) {
     sheet.appendRow(Object.keys(dataObj));
   }
 
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
   
   // Add missing columns dynamically
   Object.keys(dataObj).forEach(k => {
@@ -145,7 +149,10 @@ function deleteData(tabKey, idCol, idValue) {
   if (!sheet) return { success: false };
   
   const data = sheet.getDataRange().getValues();
-  const colIdx = data[0].indexOf(idCol);
+  const headers = data[0].map(h => String(h).trim());
+  const colIdx = headers.indexOf(idCol);
+  
+  if (colIdx === -1) return { success: false, message: 'ID Column not found' };
   
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][colIdx]) === String(idValue)) {
@@ -179,6 +186,14 @@ function saveSchedule(d) { return saveData('SCHEDULES', 'PM_ID', d); }
 function saveMapping(d) { return saveData('MAPPINGS', 'MappingID', d); }
 function deleteMapping(id) { return deleteData('MAPPINGS', 'MappingID', id); }
 function updateConfig(d) { return saveData('CONFIG', 'appName', d); } 
+function linkSOP(assetId, sopId) {
+  return saveData('ASSET_SOP', 'Link_ID', {
+    Link_ID: 'LNK-' + Date.now(),
+    AssetID_Ref: assetId,
+    SOP_ID_Ref: sopId
+  });
+}
+
 function addColumn(sheet, header) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const s = ss.getSheetByName(sheet);
@@ -199,14 +214,6 @@ function getSchema() {
     }
   });
   return schema;
-}
-
-function linkSOP(assetId, sopId) {
-  return saveData('ASSET_SOP', 'Link_ID', {
-    Link_ID: 'LNK-' + Date.now(),
-    AssetID_Ref: assetId,
-    SOP_ID_Ref: sopId
-  });
 }
 
 /* =========================================
@@ -240,9 +247,13 @@ function verifyOtp(email, code) {
 function uploadFile(data, filename, mimeType, parentId) {
   try {
     const folder = DriveApp.getFolderById(SCRIPT_PROP.getProperty('DRIVE_FOLDER_ID'));
+    // Allow saving without folder (fallback) if property not set
+    const folderToUse = folder || DriveApp.getRootFolder();
+    
     const blob = Utilities.newBlob(Utilities.base64Decode(data), mimeType, filename);
-    const file = folder.createFile(blob);
-    saveData('TICKET_ATTACHMENTS', 'AttachmentID', {
+    const file = folderToUse.createFile(blob);
+    
+    saveData('ATTACHMENTS', 'AttachmentID', {
       AttachmentID: 'ATT-' + Date.now(), TicketID_Ref: parentId,
       File_Name: filename, Drive_URL: file.getUrl(), Mime_Type: mimeType
     });
@@ -252,6 +263,8 @@ function uploadFile(data, filename, mimeType, parentId) {
 
 function callGemini(prompt) {
   const key = SCRIPT_PROP.getProperty('GEMINI_API_KEY');
+  if (!key) return "AI Not Configured";
+  
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
   const options = {
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
@@ -263,10 +276,12 @@ function callGemini(prompt) {
 }
 
 /* =========================================
-   5. SCHEMA MIGRATION SCRIPT (RUN ONCE)
+   5. SCHEMA MIGRATION & DEBUG
    ========================================= */
+
 function updateSchema() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Map "Dirty" CSV headers to "Clean" Code keys
   const renames = {
     'Phone Number': 'Phone_Number',
     'Date Submitted': 'Date_Submitted',
@@ -281,14 +296,17 @@ function updateSchema() {
   const sheets = ss.getSheets();
   sheets.forEach(sheet => {
     const lastCol = sheet.getLastColumn();
-    if (lastCol < 1) return; // Skip empty
+    if (lastCol < 1) return;
 
     const range = sheet.getRange(1, 1, 1, lastCol);
     const headers = range.getValues()[0];
     let changed = false;
 
     const newHeaders = headers.map(h => {
+      // 1. Rename specific fields
       if (renames[h]) { changed = true; return renames[h]; }
+      // 2. Remove spaces (General cleanup) e.g. "Vendor Name" -> "Vendor_Name"
+      // Only do this if it contains a space and isn't already handled
       if (typeof h === 'string' && h.includes(' ') && !h.includes('_')) {
          changed = true;
          return h.replace(/ /g, '_');

@@ -4,7 +4,6 @@ import { getSessionUserEmail } from './services/api';
 import { initDatabase, getUsers, hasPermission, getAppConfig } from './services/dataService';
 import { Loader2, Users, Shield, Database, Briefcase, Settings, Calendar, LogOut, Map as MapIcon, Package } from 'lucide-react';
 
-// Components
 import TicketForm from './components/TicketForm';
 import TicketDashboard from './components/TicketDashboard';
 import AssetManager from './components/AssetManager';
@@ -18,7 +17,6 @@ import VendorManager from './components/VendorManager';
 import CampusManager from './components/CampusManager';
 import InventoryManager from './components/InventoryManager'; 
 
-// --- CONFIG ---
 const SUPER_ADMIN_EMAIL = 'preston@grovecitychristianacademy.com';
 const STORAGE_KEY = 'gcca_user_session';
 
@@ -29,8 +27,6 @@ export default function App() {
   const [view, setView] = useState('dashboard');
   const [refreshKey, setRefreshKey] = useState(0);
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  
-  // Dynamic App Name
   const [appName, setAppName] = useState('GCCA Facilities');
 
   useEffect(() => {
@@ -40,14 +36,10 @@ export default function App() {
         const users = getUsers();
         setAllUsers(users);
         
-        // Load App Name from Config
         const config = getAppConfig();
-        if (config && config.appName) {
-          setAppName(config.appName);
-        }
+        if (config && config.appName) setAppName(config.appName);
 
         let email = await getSessionUserEmail();
-        // Fallback to local storage
         if (!email || email === '') {
            const storedEmail = localStorage.getItem(STORAGE_KEY);
            if (storedEmail) email = storedEmail;
@@ -56,15 +48,11 @@ export default function App() {
         if (email && email !== '') {
            setRealUserEmail(email);
            const normEmail = email.trim().toLowerCase();
-           
-           // 1. Try strict DB match
            const foundUser = users.find((u: User) => u.Email.toLowerCase() === normEmail);
            
            if (foundUser) {
              setCurrentUser(foundUser);
-           } 
-           // 2. FAILSAFE: Super Admin Override
-           else if (normEmail === SUPER_ADMIN_EMAIL.toLowerCase()) {
+           } else if (normEmail === SUPER_ADMIN_EMAIL.toLowerCase()) {
              console.warn("Using Super Admin Override");
              setCurrentUser({
                UserID: 'ADMIN_OVERRIDE',
@@ -99,7 +87,6 @@ export default function App() {
       });
       return;
     }
-
     const user = allUsers.find(u => u.Email.toLowerCase() === email.toLowerCase());
     if (user) {
       localStorage.setItem(STORAGE_KEY, email);
@@ -162,7 +149,6 @@ export default function App() {
       <header className="bg-[#355E3B] text-white shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* REMOVED GOLD HD BOX */}
             <h1 className="text-xl font-bold hidden sm:block">{appName}</h1>
           </div>
 

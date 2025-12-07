@@ -1,6 +1,6 @@
 import * as T from '../types';
 
-// --- BRIDGE (Connects to Google Apps Script) ---
+// --- BRIDGE ---
 const runServer = (fn: string, ...args: any[]): Promise<any> => {
   return new Promise((resolve, reject) => {
     // @ts-ignore
@@ -12,7 +12,6 @@ const runServer = (fn: string, ...args: any[]): Promise<any> => {
   });
 };
 
-// --- LOCAL CACHE STATE ---
 const DB_CACHE = {
   users: [] as T.User[],
   tickets: [] as T.Ticket[],
@@ -39,10 +38,11 @@ const DB_CACHE = {
 
 const normEmail = (email: string) => email ? email.trim().toLowerCase() : '';
 
-// --- INITIALIZATION ---
 export const initDatabase = async () => {
   try {
     const data = await runServer('getDatabaseData');
+    console.log("RAW SERVER DATA:", data); // Debugging
+
     if (data) {
       DB_CACHE.users = (data.USERS || []).map((u: any) => ({ ...u, Email: normEmail(u.Email) }));
       DB_CACHE.tickets = data.TICKETS || [];
@@ -119,26 +119,50 @@ export const lookup = {
 
 // --- ACTIONS ---
 
-// MAPPING (These were causing your errors)
-export const saveMapping = async (mapping: T.FieldMapping) => {
-  const newMapping = { ...mapping, MappingID: mapping.MappingID || `MAP-${Date.now()}` };
-  const idx = DB_CACHE.mappings.findIndex(m => m.MappingID === newMapping.MappingID);
-  if (idx >= 0) DB_CACHE.mappings[idx] = newMapping;
-  else DB_CACHE.mappings.push(newMapping);
-  return runServer('saveMapping', newMapping);
-};
-export const saveFieldMapping = saveMapping; // Alias for safety
-export const deleteFieldMapping = (id: string) => {
-  DB_CACHE.mappings = DB_CACHE.mappings.filter(m => m.MappingID !== id);
-  return runServer('deleteMapping', id);
+// PERMISSIONS (RESTORED)
+export const hasPermission = (user: T.User, perm: string): boolean => {
+  if (!user) return false;
+  if (user.User_Type?.includes('Admin') || user.User_Type?.includes('Chair')) return true;
+  // Specific role check
+  const userRoles = user.User_Type.split(',').map(r => r.trim());
+  for (const roleName of userRoles) {
+    const def = DB_CACHE.roles.find(r => r.RoleName === roleName);
+    if (def && def.Permissions.includes(perm as T.Permission)) return true;
+  }
+  return false;
 };
 
-export const fetchSchema = async () => {
-  const schema = await runServer('getSchema');
-  DB_CACHE.schema = schema;
-  return schema;
+// USERS & ROLES (FIXED: Optimistic Updates)
+export const saveUser = (u: T.User) => {
+  const finalID = u.UserID || `U-${Date.now()}`;
+  const userToSave = { ...u, UserID: finalID, Email: normEmail(u.Email) };
+  
+  const idx = DB_CACHE.users.findIndex(x => x.UserID === finalID);
+  if(idx >= 0) DB_CACHE.users[idx] = userToSave; 
+  else DB_CACHE.users.push(userToSave);
+  
+  return runServer('saveUser', userToSave);
 };
-export const addColumnToSheet = (s: string, h: string) => runServer('addColumn', s, h);
+export const deleteUser = (id: string) => {
+    DB_CACHE.users = DB_CACHE.users.filter(u => u.UserID !== id);
+    return runServer('deleteUser', id);
+};
+
+export const saveRole = async (r: T.RoleDefinition) => {
+    const idx = DB_CACHE.roles.findIndex(role => role.RoleName === r.RoleName);
+    if(idx !== -1) DB_CACHE.roles[idx] = r;
+    else DB_CACHE.roles.push(r);
+
+    return runServer('saveRole', { 
+        RoleName: r.RoleName, 
+        Description: r.Description, 
+        Permissions: r.Permissions.join(',') 
+    });
+};
+export const deleteRole = (name: string) => {
+    DB_CACHE.roles = DB_CACHE.roles.filter(r => r.RoleName !== name);
+    return runServer('deleteRole', name);
+};
 
 // TASKS & MATERIALS
 export const saveTask = async (task: T.Task) => {
@@ -176,38 +200,16 @@ export const addBuilding = (c: string, n: string) => runServer('saveBuilding', {
 export const addLocation = (b: string, n: string) => runServer('saveLocation', { BuildingID_Ref: b, Location_Name: n });
 export const addAsset = (l: string, n: string) => runServer('saveAsset', { LocationID_Ref: l, Asset_Name: n });
 
-// USERS & ROLES
-export const saveUser = (u: T.User) => {
-  const finalID = u.UserID || `U-${Date.now()}`;
-  const userToSave = { ...u, UserID: finalID, Email: normEmail(u.Email) };
-  
-  const idx = DB_CACHE.users.findIndex(x => x.UserID === finalID);
-  if(idx >= 0) DB_CACHE.users[idx] = userToSave; 
-  else DB_CACHE.users.push(userToSave);
-  
-  return runServer('saveUser', userToSave);
-};
-export const deleteUser = (id: string) => {
-    DB_CACHE.users = DB_CACHE.users.filter(u => u.UserID !== id);
-    return runServer('deleteUser', id);
-};
+export const saveMapping = (m: T.FieldMapping) => runServer('saveMapping', m);
+export const saveFieldMapping = saveMapping; // Alias
+export const deleteFieldMapping = (id: string) => runServer('deleteMapping', id);
 
-export const saveRole = async (r: T.RoleDefinition) => {
-    const idx = DB_CACHE.roles.findIndex(role => role.RoleName === r.RoleName);
-    if(idx !== -1) DB_CACHE.roles[idx] = r;
-    else DB_CACHE.roles.push(r);
-
-    return runServer('saveRole', { 
-        RoleName: r.RoleName, 
-        Description: r.Description, 
-        Permissions: r.Permissions.join(',') 
-    });
+export const fetchSchema = async () => {
+  const schema = await runServer('getSchema');
+  DB_CACHE.schema = schema;
+  return schema;
 };
-export const deleteRole = (name: string) => {
-    DB_CACHE.roles = DB_CACHE.roles.filter(r => r.RoleName !== name);
-    return runServer('deleteRole', name);
-};
-
+export const addColumnToSheet = (s: string, h: string) => runServer('addColumn', s, h);
 export const requestOtp = (e: string) => runServer('requestOtp', e);
 export const verifyOtp = (e: string, c: string) => runServer('verifyOtp', e, c);
 
@@ -221,10 +223,7 @@ export const getAttachmentsForBid = (bidId: string) => [];
 export const getVendorHistory = (id: string) => DB_CACHE.bids.filter(b => b.VendorID_Ref === id);
 export const getOpenTicketsForVendors = () => DB_CACHE.tickets.filter(t => t.Status === 'Open for Bid');
 
-export const rejectAccountRequest = (id: string) => {
-    DB_CACHE.accountRequests = DB_CACHE.accountRequests.filter(r => r.RequestID !== id);
-    return runServer('deleteAccountRequest', id);
-};
+export const rejectAccountRequest = (id: string) => runServer('deleteAccountRequest', id);
 export const submitAccountRequest = (d: any) => runServer('submitAccountRequest', d);
 
 export const updateAppConfig = (c: T.SiteConfig) => {
@@ -232,12 +231,7 @@ export const updateAppConfig = (c: T.SiteConfig) => {
     return runServer('updateConfig', c);
 };
 
-export const saveVendor = (v: T.Vendor) => {
-   const idx = DB_CACHE.vendors.findIndex(vn => vn.VendorID === v.VendorID);
-   if(idx >= 0) DB_CACHE.vendors[idx] = v; else DB_CACHE.vendors.push(v);
-   return runServer('saveVendor', v);
-};
-
+export const saveVendor = (v: T.Vendor) => runServer('saveVendor', v);
 export const updateVendorStatus = (id: string, s: string) => runServer('saveVendor', { VendorID: id, Status: s });
 export const submitBid = (v: string, t: string, a: number, n: string) => runServer('submitBid', { VendorID_Ref: v, TicketID_Ref: t, Amount: a, Notes: n });
 export const acceptBid = (id: string, t: string) => runServer('updateBid', { BidID: id, Status: 'Accepted' });
@@ -252,7 +246,6 @@ export const linkSOPToAsset = (a: string, s: string) => runServer('linkSOP', a, 
 export const updateSOP = (s: T.SOP) => runServer('saveSOP', s);
 export const deleteMaintenanceSchedule = (id: string) => runServer('deleteMaintenanceSchedule', id);
 export const saveMaintenanceSchedule = (s: T.MaintenanceSchedule) => runServer('saveSchedule', s);
-
 export const registerVendor = (v: any) => runServer('saveVendor', v);
 export const uploadFile = async (file: File, ticketId: string) => {
   return new Promise((resolve, reject) => {
@@ -270,7 +263,6 @@ export const uploadFile = async (file: File, ticketId: string) => {
 
 // --- MASTER LIST OF APP FIELDS ---
 export const APP_FIELDS: T.AppField[] = [
-  // TICKETS
   { id: 'ticket.id', category: 'Ticket', label: 'Ticket ID', description: 'T-XXXX', type: 'text' },
   { id: 'ticket.title', category: 'Ticket', label: 'Title', description: 'Summary', type: 'text' },
   { id: 'ticket.status', category: 'Ticket', label: 'Status', description: 'State', type: 'select' },
@@ -281,14 +273,12 @@ export const APP_FIELDS: T.AppField[] = [
   { id: 'ticket.assigned_staff', category: 'Ticket', label: 'Assigned Staff', description: 'Staff Email', type: 'text' },
   { id: 'ticket.public', category: 'Ticket', label: 'Is Public', description: 'Boolean', type: 'boolean' },
 
-  // ASSETS
   { id: 'asset.id', category: 'Asset', label: 'Asset ID', description: 'Unique ID', type: 'text' },
   { id: 'asset.name', category: 'Asset', label: 'Asset Name', description: 'Equipment Name', type: 'text' },
   { id: 'asset.serial', category: 'Asset', label: 'Serial Number', description: 'Manufacturer Serial', type: 'text' },
   { id: 'asset.warranty', category: 'Asset', label: 'Warranty Expires', description: 'Date', type: 'date' },
   { id: 'asset.meter', category: 'Asset', label: 'Last Meter', description: 'Reading', type: 'number' },
   
-  // LOCATIONS
   { id: 'location.id', category: 'Location', label: 'Location ID', description: 'LOC-XXXX', type: 'text' },
   { id: 'location.name', category: 'Location', label: 'Location Name', description: 'Room Name', type: 'text' },
   { id: 'location.parent', category: 'Location', label: 'Parent Location Ref', description: 'For sub-rooms', type: 'text' },
@@ -296,30 +286,25 @@ export const APP_FIELDS: T.AppField[] = [
   { id: 'location.floor', category: 'Location', label: 'Floor Type', description: 'Carpet/Tile', type: 'text' },
   { id: 'location.sqft', category: 'Location', label: 'Square Footage', description: 'Area', type: 'number' },
 
-  // PM SCHEDULES
   { id: 'pm.id', category: 'Schedule', label: 'PM ID', description: 'Schedule Unique ID', type: 'text' },
   { id: 'pm.task', category: 'Schedule', label: 'Task Name', description: 'Action to perform', type: 'text' },
   { id: 'pm.next', category: 'Schedule', label: 'Next Due Date', description: 'Date', type: 'date' },
   { id: 'pm.freq', category: 'Schedule', label: 'Frequency', description: 'Daily/Weekly', type: 'select' },
   { id: 'pm.meter_trig', category: 'Schedule', label: 'Meter Trigger', description: 'Run at X usage', type: 'number' },
 
-  // CAMPUS
   { id: 'campus.name', category: 'Campus', label: 'Campus Name', description: 'Main Name', type: 'text' },
   { id: 'campus.phone', category: 'Campus', label: 'Phone Number', description: 'Contact', type: 'text' },
   { id: 'campus.map', category: 'Campus', label: 'Campus Map', description: 'URL to Map', type: 'text' },
 
-  // BUILDING
   { id: 'building.name', category: 'Building', label: 'Building Name', description: 'Name', type: 'text' },
   { id: 'building.plan', category: 'Building', label: 'Floor Plan', description: 'URL/File', type: 'text' },
   { id: 'building.photo', category: 'Building', label: 'Cover Photo', description: 'URL/Image', type: 'text' },
 
-  // VENDOR
   { id: 'vendor.company', category: 'Vendor', label: 'Company Name', description: 'Business Name', type: 'text' },
   { id: 'vendor.contact', category: 'Vendor', label: 'Contact Person', description: 'Name', type: 'text' },
   { id: 'vendor.address', category: 'Vendor', label: 'Address', description: 'Full Address', type: 'text' },
   { id: 'vendor.website', category: 'Vendor', label: 'Website', description: 'URL', type: 'text' },
   
-  // INVENTORY
   { id: 'mat.name', category: 'Inventory', label: 'Material Name', description: 'Item Name', type: 'text' },
   { id: 'mat.qty', category: 'Inventory', label: 'Quantity on Hand', description: 'Current Stock', type: 'number' },
   { id: 'mat.cost', category: 'Inventory', label: 'Unit Cost', description: '$ per unit', type: 'number' }
