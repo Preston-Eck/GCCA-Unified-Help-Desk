@@ -290,7 +290,14 @@ export const updateVendorStatus = (id: string, status: string) => {
   if (vendor) vendor.Status = status as any;
   return runServer('saveVendor', { VendorID: id, Status: status });
 };
-export const registerVendor = (v: any) => runServer('saveVendor', { ...v, VendorID: `V-${Date.now()}`, Status: 'Pending', DateJoined: new Date().toISOString() });
+// UPDATED: Now supports Address and Website
+export const registerVendor = (v: any) => runServer('saveVendor', { 
+  ...v, 
+  VendorID: `V-${Date.now()}`, 
+  Status: 'Pending', 
+  DateJoined: new Date().toISOString() 
+});
+
 export const submitBid = (v: string, t: string, a: number, n: string, f: any[]) => runServer('submitBid', { BidID: `BID-${Date.now()}`, VendorID_Ref: v, TicketID_Ref: t, Amount: a, Notes: n, Status: 'Pending', DateSubmitted: new Date().toISOString() });
 export const acceptBid = (b: string, t: string) => runServer('updateBid', { BidID: b, Status: 'Accepted' });
 export const addVendorReview = (v: string, t: string, a: string, r: number, c: string) => runServer('saveReview', { ReviewID: `REV-${Date.now()}`, VendorID_Ref: v, TicketID_Ref: t, Author_Email: a, Rating: r, Comment: c, Timestamp: new Date().toISOString() });
@@ -338,14 +345,18 @@ export const verifyOtp = (email: string, code: string) => runServer('verifyOtp',
 
 // --- SCHEMA & MAPPING ---
 
-// 1. Fetch live headers from Spreadsheet
 export const fetchSchema = async () => {
   const schema = await runServer('getSchema');
   DB_CACHE.schema = schema;
   return schema;
 };
 
-// 2. Define Known App Fields (The "User Inputs")
+// --- NEW: Add Column Capability ---
+export const addColumnToSheet = async (sheet: string, header: string) => {
+  return runServer('addColumn', sheet, header);
+};
+
+// 2. COMPREHENSIVE APP FIELDS LIST (Expanded)
 export const APP_FIELDS: AppField[] = [
   // --- TICKETS ---
   { id: 'ticket.id', label: 'Ticket ID', description: 'Unique Identifier (T-XXXX)', type: 'text' },
@@ -356,10 +367,10 @@ export const APP_FIELDS: AppField[] = [
   { id: 'ticket.category', label: 'Category', description: 'IT or Facilities', type: 'select' },
   { id: 'ticket.status', label: 'Status', description: 'New, Assigned, etc.', type: 'select' },
   { id: 'ticket.priority', label: 'Priority', description: 'Critical, High, Medium, Low', type: 'select' },
-  { id: 'ticket.campus', label: 'Campus ID', description: 'Link to Campus', type: 'text' },
-  { id: 'ticket.building', label: 'Building ID', description: 'Link to Building', type: 'text' },
-  { id: 'ticket.location', label: 'Location ID', description: 'Link to Location', type: 'text' },
-  { id: 'ticket.asset', label: 'Asset ID', description: 'Link to specific Asset', type: 'text' },
+  { id: 'ticket.campus', label: 'Campus Ref', description: 'ID of Campus', type: 'text' },
+  { id: 'ticket.building', label: 'Building Ref', description: 'ID of Building', type: 'text' },
+  { id: 'ticket.location', label: 'Location Ref', description: 'ID of Location', type: 'text' },
+  { id: 'ticket.asset', label: 'Asset Ref', description: 'ID of related Asset', type: 'text' },
   { id: 'ticket.assigned_staff', label: 'Assigned Staff', description: 'Email of staff member', type: 'text' },
   { id: 'ticket.assigned_vendor', label: 'Assigned Vendor', description: 'ID of external vendor', type: 'text' },
   { id: 'ticket.public', label: 'Is Public?', description: 'Boolean flag', type: 'boolean' },
@@ -373,13 +384,27 @@ export const APP_FIELDS: AppField[] = [
   { id: 'user.roles', label: 'Roles', description: 'Comma-separated roles', type: 'text' },
   { id: 'user.dept', label: 'Department', description: 'Comma-separated depts', type: 'text' },
 
+  // --- CAMPUS ---
+  { id: 'campus.id', label: 'Campus ID', description: 'Unique Identifier', type: 'text' },
+  { id: 'campus.name', label: 'Campus Name', description: 'Main campus identifier', type: 'text' },
+
+  // --- BUILDINGS ---
+  { id: 'building.id', label: 'Building ID', description: 'Unique Identifier', type: 'text' },
+  { id: 'building.name', label: 'Building Name', description: 'Display Name', type: 'text' },
+  { id: 'building.campus_ref', label: 'Campus Ref', description: 'Link to Parent Campus', type: 'text' },
+
+  // --- LOCATIONS ---
+  { id: 'location.id', label: 'Location ID', description: 'Unique Identifier', type: 'text' },
+  { id: 'location.name', label: 'Location Name', description: 'Room 101, Gym, etc.', type: 'text' },
+  { id: 'location.building_ref', label: 'Building Ref', description: 'Link to Parent Building', type: 'text' },
+
   // --- ASSETS ---
   { id: 'asset.id', label: 'Asset ID', description: 'Unique Identifier', type: 'text' },
   { id: 'asset.name', label: 'Asset Name', description: 'Equipment Name', type: 'text' },
   { id: 'asset.model', label: 'Model Number', description: 'Manufacturer Model', type: 'text' },
   { id: 'asset.serial', label: 'Serial Number', description: 'Unique Serial', type: 'text' },
   { id: 'asset.install_date', label: 'Install Date', description: 'Date installed', type: 'date' },
-  { id: 'asset.location', label: 'Location Ref', description: 'Link to Location', type: 'text' },
+  { id: 'asset.location_ref', label: 'Location Ref', description: 'Link to Location', type: 'text' },
 
   // --- VENDORS ---
   { id: 'vendor.id', label: 'Vendor ID', description: 'Unique Identifier', type: 'text' },
@@ -387,16 +412,30 @@ export const APP_FIELDS: AppField[] = [
   { id: 'vendor.contact', label: 'Contact Person', description: 'Rep Name', type: 'text' },
   { id: 'vendor.email', label: 'Contact Email', description: 'Rep Email', type: 'text' },
   { id: 'vendor.phone', label: 'Phone', description: 'Contact Phone', type: 'text' },
+  { id: 'vendor.address', label: 'Address', description: 'Physical Address', type: 'text' }, // NEW
+  { id: 'vendor.website', label: 'Website', description: 'URL', type: 'text' }, // NEW
   { id: 'vendor.type', label: 'Service Type', description: 'IT, Facilities, etc.', type: 'select' },
   { id: 'vendor.status', label: 'Status', description: 'Approved/Pending', type: 'select' },
+
+  // --- SOPs ---
+  { id: 'sop.id', label: 'SOP ID', description: 'Unique Identifier', type: 'text' },
+  { id: 'sop.title', label: 'SOP Title', description: 'Procedure Name', type: 'text' },
+  { id: 'sop.text', label: 'Procedure Text', description: 'Full steps', type: 'text' },
+  { id: 'sop.link', label: 'Doc Link', description: 'External Google Doc URL', type: 'text' },
+
+  // --- LINKS (ASSET <-> SOP) ---
+  { id: 'link.id', label: 'Link ID', description: 'Unique Join ID', type: 'text' },
+  { id: 'link.asset_ref', label: 'Asset Ref', description: 'Target Asset', type: 'text' },
+  { id: 'link.sop_ref', label: 'SOP Ref', description: 'Target SOP', type: 'text' },
 
   // --- SCHEDULES ---
   { id: 'schedule.id', label: 'Schedule ID', description: 'Unique Identifier', type: 'text' },
   { id: 'schedule.task', label: 'Task Name', description: 'Name of PM Task', type: 'text' },
-  { id: 'schedule.asset', label: 'Asset Ref', description: 'Link to Asset', type: 'text' },
+  { id: 'schedule.asset_ref', label: 'Asset Ref', description: 'Link to Asset', type: 'text' },
   { id: 'schedule.freq', label: 'Frequency', description: 'Daily, Weekly, etc.', type: 'select' },
   { id: 'schedule.next', label: 'Next Due', description: 'Date string', type: 'date' },
   { id: 'schedule.last', label: 'Last Done', description: 'Date string', type: 'date' },
+  { id: 'schedule.sop_ref', label: 'SOP Ref', description: 'Optional SOP Link', type: 'text' },
 ];
 
 export const getMappings = () => DB_CACHE.mappings;
@@ -415,10 +454,6 @@ export const saveFieldMapping = async (mapping: FieldMapping) => {
 export const deleteFieldMapping = async (id: string) => {
   DB_CACHE.mappings = DB_CACHE.mappings.filter(m => m.MappingID !== id);
   return runServer('deleteMapping', id);
-};
-
-export const addColumnToSheet = async (sheet: string, header: string) => {
-  return runServer('addColumn', sheet, header);
 };
 
 // 3. Prepopulation Logic
