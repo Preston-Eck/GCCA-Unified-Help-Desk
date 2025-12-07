@@ -78,11 +78,23 @@ function getDatabaseData() {
 function sheetToJson(sheet) {
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return [];
-  const headers = values[0];
+  
+  // Clean Headers
+  const headers = values[0].map(h => String(h).trim());
   const data = values.slice(1);
+  
   return data.map(row => {
     let obj = {};
-    headers.forEach((h, i) => obj[h] = row[i]);
+    headers.forEach((h, i) => {
+       if (!h) return;
+       let val = row[i];
+       
+       // CRITICAL FIX: Convert Google Dates to Strings
+       if (val instanceof Date) {
+         val = val.toISOString();
+       }
+       obj[h] = val;
+    });
     return obj;
   });
 }

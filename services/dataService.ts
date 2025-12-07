@@ -1,6 +1,6 @@
 import * as T from '../types';
 
-// --- BRIDGE ---
+// --- BRIDGE (Connects to Google Apps Script) ---
 const runServer = (fn: string, ...args: any[]): Promise<any> => {
   return new Promise((resolve, reject) => {
     // @ts-ignore
@@ -12,6 +12,7 @@ const runServer = (fn: string, ...args: any[]): Promise<any> => {
   });
 };
 
+// --- LOCAL CACHE STATE ---
 const DB_CACHE = {
   users: [] as T.User[],
   tickets: [] as T.Ticket[],
@@ -38,6 +39,7 @@ const DB_CACHE = {
 
 const normEmail = (email: string) => email ? email.trim().toLowerCase() : '';
 
+// --- INITIALIZATION ---
 export const initDatabase = async () => {
   try {
     const data = await runServer('getDatabaseData');
@@ -116,6 +118,29 @@ export const lookup = {
 };
 
 // --- ACTIONS ---
+
+// MAPPING (These were causing your errors)
+export const saveMapping = async (mapping: T.FieldMapping) => {
+  const newMapping = { ...mapping, MappingID: mapping.MappingID || `MAP-${Date.now()}` };
+  const idx = DB_CACHE.mappings.findIndex(m => m.MappingID === newMapping.MappingID);
+  if (idx >= 0) DB_CACHE.mappings[idx] = newMapping;
+  else DB_CACHE.mappings.push(newMapping);
+  return runServer('saveMapping', newMapping);
+};
+export const saveFieldMapping = saveMapping; // Alias for safety
+export const deleteFieldMapping = (id: string) => {
+  DB_CACHE.mappings = DB_CACHE.mappings.filter(m => m.MappingID !== id);
+  return runServer('deleteMapping', id);
+};
+
+export const fetchSchema = async () => {
+  const schema = await runServer('getSchema');
+  DB_CACHE.schema = schema;
+  return schema;
+};
+export const addColumnToSheet = (s: string, h: string) => runServer('addColumn', s, h);
+
+// TASKS & MATERIALS
 export const saveTask = async (task: T.Task) => {
   const newTask = { ...task, TaskID: task.TaskID || `TSK-${Date.now()}` };
   DB_CACHE.tasks.push(newTask);
@@ -128,16 +153,15 @@ export const saveMaterial = async (mat: T.Material) => {
   return runServer('saveMaterial', newMat);
 };
 
+// TICKETS
 export const saveTicket = (t: T.Ticket) => runServer('saveTicket', t);
 export const submitTicket = (email: string, data: any) => {
     return runServer('saveTicket', { ...data, Submitter_Email: email, Date_Submitted: new Date().toISOString() });
 };
-
 export const updateTicketStatus = (id: string, status: string, email?: string, assign?: string) => runServer('updateTicketStatus', id, status, assign);
 export const claimTicket = (id: string, email: string) => updateTicketStatus(id, 'Assigned', email, email);
 
-export const saveUser = (u: T.User) => runServer('saveUser', u);
-export const deleteUser = (id: string) => runServer('deleteUser', id);
+// INFRASTRUCTURE
 export const saveAsset = (a: T.Asset) => runServer('saveAsset', a);
 export const updateAsset = (a: T.Asset) => runServer('saveAsset', a);
 export const deleteAsset = (id: string) => runServer('deleteAsset', id);
@@ -148,40 +172,46 @@ export const deleteBuilding = (id: string) => runServer('deleteBuilding', id);
 export const saveLocation = (l: T.Location) => runServer('saveLocation', l);
 export const deleteLocation = (id: string) => runServer('deleteLocation', id);
 
-export const saveMapping = (m: T.FieldMapping) => runServer('saveMapping', m);
-export const saveFieldMapping = saveMapping; // Alias
-export const deleteFieldMapping = (id: string) => runServer('deleteMapping', id);
+export const addBuilding = (c: string, n: string) => runServer('saveBuilding', { CampusID_Ref: c, Building_Name: n });
+export const addLocation = (b: string, n: string) => runServer('saveLocation', { BuildingID_Ref: b, Location_Name: n });
+export const addAsset = (l: string, n: string) => runServer('saveAsset', { LocationID_Ref: l, Asset_Name: n });
 
-// FIX: Optimistic Update + Array to String Conversion
+// USERS & ROLES
+export const saveUser = (u: T.User) => {
+  const finalID = u.UserID || `U-${Date.now()}`;
+  const userToSave = { ...u, UserID: finalID, Email: normEmail(u.Email) };
+  
+  const idx = DB_CACHE.users.findIndex(x => x.UserID === finalID);
+  if(idx >= 0) DB_CACHE.users[idx] = userToSave; 
+  else DB_CACHE.users.push(userToSave);
+  
+  return runServer('saveUser', userToSave);
+};
+export const deleteUser = (id: string) => {
+    DB_CACHE.users = DB_CACHE.users.filter(u => u.UserID !== id);
+    return runServer('deleteUser', id);
+};
+
 export const saveRole = async (r: T.RoleDefinition) => {
-    // 1. Optimistic Update (UI updates instantly)
     const idx = DB_CACHE.roles.findIndex(role => role.RoleName === r.RoleName);
     if(idx !== -1) DB_CACHE.roles[idx] = r;
     else DB_CACHE.roles.push(r);
 
-    // 2. Server Persist (Convert array to comma-string for CSV)
     return runServer('saveRole', { 
         RoleName: r.RoleName, 
         Description: r.Description, 
         Permissions: r.Permissions.join(',') 
     });
 };
-
 export const deleteRole = (name: string) => {
     DB_CACHE.roles = DB_CACHE.roles.filter(r => r.RoleName !== name);
     return runServer('deleteRole', name);
 };
 
-export const fetchSchema = async () => {
-  const schema = await runServer('getSchema');
-  DB_CACHE.schema = schema;
-  return schema;
-};
-export const addColumnToSheet = (s: string, h: string) => runServer('addColumn', s, h);
 export const requestOtp = (e: string) => runServer('requestOtp', e);
 export const verifyOtp = (e: string, c: string) => runServer('verifyOtp', e, c);
 
-// --- LEGACY/ADAPTERS ---
+// LEGACY ADAPTERS
 export const getAssetDetails = (id: string) => DB_CACHE.assets.find(a => a.AssetID === id);
 export const getVendorReview = (id: string) => DB_CACHE.reviews.find(r => r.TicketID_Ref === id);
 export const getVendorTickets = (id: string) => DB_CACHE.tickets.filter(t => t.Assigned_VendorID_Ref === id);
@@ -191,15 +221,23 @@ export const getAttachmentsForBid = (bidId: string) => [];
 export const getVendorHistory = (id: string) => DB_CACHE.bids.filter(b => b.VendorID_Ref === id);
 export const getOpenTicketsForVendors = () => DB_CACHE.tickets.filter(t => t.Status === 'Open for Bid');
 
-export const rejectAccountRequest = (id: string) => runServer('deleteAccountRequest', id);
+export const rejectAccountRequest = (id: string) => {
+    DB_CACHE.accountRequests = DB_CACHE.accountRequests.filter(r => r.RequestID !== id);
+    return runServer('deleteAccountRequest', id);
+};
 export const submitAccountRequest = (d: any) => runServer('submitAccountRequest', d);
 
 export const updateAppConfig = (c: T.SiteConfig) => {
-    DB_CACHE.config = c; // Optimistic update
+    DB_CACHE.config = c;
     return runServer('updateConfig', c);
 };
 
-export const saveVendor = (v: T.Vendor) => runServer('saveVendor', v);
+export const saveVendor = (v: T.Vendor) => {
+   const idx = DB_CACHE.vendors.findIndex(vn => vn.VendorID === v.VendorID);
+   if(idx >= 0) DB_CACHE.vendors[idx] = v; else DB_CACHE.vendors.push(v);
+   return runServer('saveVendor', v);
+};
+
 export const updateVendorStatus = (id: string, s: string) => runServer('saveVendor', { VendorID: id, Status: s });
 export const submitBid = (v: string, t: string, a: number, n: string) => runServer('submitBid', { VendorID_Ref: v, TicketID_Ref: t, Amount: a, Notes: n });
 export const acceptBid = (id: string, t: string) => runServer('updateBid', { BidID: id, Status: 'Accepted' });
@@ -214,9 +252,7 @@ export const linkSOPToAsset = (a: string, s: string) => runServer('linkSOP', a, 
 export const updateSOP = (s: T.SOP) => runServer('saveSOP', s);
 export const deleteMaintenanceSchedule = (id: string) => runServer('deleteMaintenanceSchedule', id);
 export const saveMaintenanceSchedule = (s: T.MaintenanceSchedule) => runServer('saveSchedule', s);
-export const addBuilding = (c: string, n: string) => runServer('saveBuilding', { CampusID_Ref: c, Building_Name: n });
-export const addLocation = (b: string, n: string) => runServer('saveLocation', { BuildingID_Ref: b, Location_Name: n });
-export const addAsset = (l: string, n: string) => runServer('saveAsset', { LocationID_Ref: l, Asset_Name: n });
+
 export const registerVendor = (v: any) => runServer('saveVendor', v);
 export const uploadFile = async (file: File, ticketId: string) => {
   return new Promise((resolve, reject) => {
@@ -230,18 +266,6 @@ export const uploadFile = async (file: File, ticketId: string) => {
       } catch (e) { reject(e); }
     };
   });
-};
-
-// --- PERMISSIONS ---
-export const hasPermission = (user: T.User, perm: string): boolean => {
-  if (!user) return false;
-  if (user.User_Type?.includes('Admin') || user.User_Type?.includes('Chair')) return true;
-  const userRoles = user.User_Type.split(',').map(r => r.trim());
-  for (const roleName of userRoles) {
-    const def = DB_CACHE.roles.find(r => r.RoleName === roleName);
-    if (def && def.Permissions.includes(perm as T.Permission)) return true;
-  }
-  return false;
 };
 
 // --- MASTER LIST OF APP FIELDS ---
