@@ -16,7 +16,7 @@ import RoleManager from './components/RoleManager';
 import UserManager from './components/UserManager';
 import VendorManager from './components/VendorManager';
 import CampusManager from './components/CampusManager';
-// import InventoryManager from './components/InventoryManager'; // Uncomment if file exists
+import InventoryManager from './components/InventoryManager'; // <--- ENABLED
 
 // --- CONFIG ---
 const SUPER_ADMIN_EMAIL = 'preston@grovecitychristianacademy.com';
@@ -86,8 +86,7 @@ export default function App() {
     }
   };
 
-  // Helper to check permissions cleanly
-  const check = (perm: any) => currentUser ? hasPermission(currentUser, perm) : false;
+  const check = (perm: string) => currentUser ? hasPermission(currentUser, perm) : false;
 
   if (loading) {
     return (
@@ -107,7 +106,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col font-sans">
-      {/* HEADER */}
       <header className="bg-[#355E3B] text-white shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -149,7 +147,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* BODY CONTENT */}
       <main className="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
            <button onClick={() => setView('dashboard')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'dashboard' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
@@ -215,7 +212,7 @@ export default function App() {
           {view === 'form' && <TicketForm userEmail={currentUser.Email} onSuccess={() => setView('dashboard')} />}
           {view === 'assets' && <AssetManager user={currentUser} />}
           {view === 'campuses' && <CampusManager user={currentUser} />}
-          {/* {view === 'inventory' && <InventoryManager />} */} 
+          {view === 'inventory' && <InventoryManager />}
           {view === 'operations' && <OperationsDashboard user={currentUser} />}
           {view === 'users' && <UserManager currentUser={currentUser} />}
           {view === 'vendors' && <VendorManager />} 

@@ -243,25 +243,46 @@ function callGemini(prompt) {
    ========================================= */
 function updateSchema() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  
-  // 1. Normalize Header Names (Remove spaces, standardized casing)
-  // Add specific mappings here if you want to rename "Phone Number" to "Phone_Number" automatically
   const renames = {
     'Phone Number': 'Phone_Number',
     'Date Submitted': 'Date_Submitted',
     'Campus Map': 'Campus_Map',
-    'Next Due Date': 'Next_Due_Date'
+    'Next Due Date': 'Next_Due_Date',
+    'Building Floor Plan': 'Building_Floor_Plan',
+    'Building Cover Photo': 'Building_Cover_Photo'
   };
   
   const sheets = ss.getSheets();
   sheets.forEach(sheet => {
-    const range = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+    const lastCol = sheet.getLastColumn();
+    // FIX: Skip empty sheets to prevent crash
+    if (lastCol < 1) {
+      console.log(`Skipping empty sheet: ${sheet.getName()}`);
+      return;
+    }
+
+    const range = sheet.getRange(1, 1, 1, lastCol);
     const headers = range.getValues()[0];
-    const newHeaders = headers.map(h => renames[h] || h);
+    let changed = false;
+
+    const newHeaders = headers.map(h => {
+      // 1. Apply specific renames
+      if (renames[h]) {
+        changed = true;
+        return renames[h];
+      }
+      // 2. Auto-fix spaces to underscores (optional, safer for code)
+      if (h.includes(' ')) {
+        // Uncomment next line if you want to auto-fix ALL spaces
+        // changed = true; return h.replace(/ /g, '_'); 
+      }
+      return h;
+    });
     
-    if (JSON.stringify(headers) !== JSON.stringify(newHeaders)) {
+    if (changed) {
       range.setValues([newHeaders]);
       console.log(`Updated headers in ${sheet.getName()}`);
     }
   });
+  return "Schema Sync Complete";
 }
