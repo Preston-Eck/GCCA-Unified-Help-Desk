@@ -148,13 +148,29 @@ export const deleteBuilding = (id: string) => runServer('deleteBuilding', id);
 export const saveLocation = (l: T.Location) => runServer('saveLocation', l);
 export const deleteLocation = (id: string) => runServer('deleteLocation', id);
 
-export const addBuilding = (c: string, n: string) => runServer('saveBuilding', { CampusID_Ref: c, Building_Name: n });
-export const addLocation = (b: string, n: string) => runServer('saveLocation', { BuildingID_Ref: b, Location_Name: n });
-export const addAsset = (l: string, n: string) => runServer('saveAsset', { LocationID_Ref: l, Asset_Name: n });
-
 export const saveMapping = (m: T.FieldMapping) => runServer('saveMapping', m);
+export const saveFieldMapping = saveMapping; // Alias
 export const deleteFieldMapping = (id: string) => runServer('deleteMapping', id);
-export const saveFieldMapping = saveMapping; // Alias for backward compatibility
+
+// FIX: Optimistic Update + Array to String Conversion
+export const saveRole = async (r: T.RoleDefinition) => {
+    // 1. Optimistic Update (UI updates instantly)
+    const idx = DB_CACHE.roles.findIndex(role => role.RoleName === r.RoleName);
+    if(idx !== -1) DB_CACHE.roles[idx] = r;
+    else DB_CACHE.roles.push(r);
+
+    // 2. Server Persist (Convert array to comma-string for CSV)
+    return runServer('saveRole', { 
+        RoleName: r.RoleName, 
+        Description: r.Description, 
+        Permissions: r.Permissions.join(',') 
+    });
+};
+
+export const deleteRole = (name: string) => {
+    DB_CACHE.roles = DB_CACHE.roles.filter(r => r.RoleName !== name);
+    return runServer('deleteRole', name);
+};
 
 export const fetchSchema = async () => {
   const schema = await runServer('getSchema');
@@ -178,9 +194,11 @@ export const getOpenTicketsForVendors = () => DB_CACHE.tickets.filter(t => t.Sta
 export const rejectAccountRequest = (id: string) => runServer('deleteAccountRequest', id);
 export const submitAccountRequest = (d: any) => runServer('submitAccountRequest', d);
 
-export const updateAppConfig = (c: T.SiteConfig) => runServer('updateConfig', c);
-export const saveRole = (r: any) => runServer('saveRole', r);
-export const deleteRole = (id: string) => runServer('deleteRole', id);
+export const updateAppConfig = (c: T.SiteConfig) => {
+    DB_CACHE.config = c; // Optimistic update
+    return runServer('updateConfig', c);
+};
+
 export const saveVendor = (v: T.Vendor) => runServer('saveVendor', v);
 export const updateVendorStatus = (id: string, s: string) => runServer('saveVendor', { VendorID: id, Status: s });
 export const submitBid = (v: string, t: string, a: number, n: string) => runServer('submitBid', { VendorID_Ref: v, TicketID_Ref: t, Amount: a, Notes: n });
@@ -196,7 +214,9 @@ export const linkSOPToAsset = (a: string, s: string) => runServer('linkSOP', a, 
 export const updateSOP = (s: T.SOP) => runServer('saveSOP', s);
 export const deleteMaintenanceSchedule = (id: string) => runServer('deleteMaintenanceSchedule', id);
 export const saveMaintenanceSchedule = (s: T.MaintenanceSchedule) => runServer('saveSchedule', s);
-
+export const addBuilding = (c: string, n: string) => runServer('saveBuilding', { CampusID_Ref: c, Building_Name: n });
+export const addLocation = (b: string, n: string) => runServer('saveLocation', { BuildingID_Ref: b, Location_Name: n });
+export const addAsset = (l: string, n: string) => runServer('saveAsset', { LocationID_Ref: l, Asset_Name: n });
 export const registerVendor = (v: any) => runServer('saveVendor', v);
 export const uploadFile = async (file: File, ticketId: string) => {
   return new Promise((resolve, reject) => {
@@ -216,7 +236,12 @@ export const uploadFile = async (file: File, ticketId: string) => {
 export const hasPermission = (user: T.User, perm: string): boolean => {
   if (!user) return false;
   if (user.User_Type?.includes('Admin') || user.User_Type?.includes('Chair')) return true;
-  return true; 
+  const userRoles = user.User_Type.split(',').map(r => r.trim());
+  for (const roleName of userRoles) {
+    const def = DB_CACHE.roles.find(r => r.RoleName === roleName);
+    if (def && def.Permissions.includes(perm as T.Permission)) return true;
+  }
+  return false;
 };
 
 // --- MASTER LIST OF APP FIELDS ---

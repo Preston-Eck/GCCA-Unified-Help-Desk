@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from './types';
 import { getSessionUserEmail } from './services/api';
-import { initDatabase, getUsers, hasPermission } from './services/dataService';
+import { initDatabase, getUsers, hasPermission, getAppConfig } from './services/dataService';
 import { Loader2, Users, Shield, Database, Briefcase, Settings, Calendar, LogOut, Map as MapIcon, Package } from 'lucide-react';
 
 // Components
@@ -29,6 +29,9 @@ export default function App() {
   const [view, setView] = useState('dashboard');
   const [refreshKey, setRefreshKey] = useState(0);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  
+  // Dynamic App Name
+  const [appName, setAppName] = useState('GCCA Facilities');
 
   useEffect(() => {
     const init = async () => {
@@ -36,9 +39,15 @@ export default function App() {
         await initDatabase();
         const users = getUsers();
         setAllUsers(users);
+        
+        // Load App Name from Config
+        const config = getAppConfig();
+        if (config && config.appName) {
+          setAppName(config.appName);
+        }
 
         let email = await getSessionUserEmail();
-        // Fallback to local storage if Google Session fails (common in IFrames)
+        // Fallback to local storage
         if (!email || email === '') {
            const storedEmail = localStorage.getItem(STORAGE_KEY);
            if (storedEmail) email = storedEmail;
@@ -55,7 +64,6 @@ export default function App() {
              setCurrentUser(foundUser);
            } 
            // 2. FAILSAFE: Super Admin Override
-           // If DB is broken or user missing, let the Admin in to fix it.
            else if (normEmail === SUPER_ADMIN_EMAIL.toLowerCase()) {
              console.warn("Using Super Admin Override");
              setCurrentUser({
@@ -78,7 +86,6 @@ export default function App() {
   }, [refreshKey]);
 
   const handleManualLogin = (email: string) => {
-    // Also apply override logic to manual login
     if (email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
       localStorage.setItem(STORAGE_KEY, email);
       setRealUserEmail(email);
@@ -113,7 +120,6 @@ export default function App() {
 
   const handleRoleSwitch = (targetEmail: string) => {
     if (targetEmail === 'REAL_USER') {
-       // Reset to self (or override if self not in DB)
        if (realUserEmail.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
          setCurrentUser({
             UserID: 'ADMIN_OVERRIDE',
@@ -156,8 +162,8 @@ export default function App() {
       <header className="bg-[#355E3B] text-white shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-[#FFD700] rounded-sm flex items-center justify-center text-gray-900 font-bold">HD</div>
-            <h1 className="text-xl font-bold hidden sm:block">GCCA Facilities</h1>
+            {/* REMOVED GOLD HD BOX */}
+            <h1 className="text-xl font-bold hidden sm:block">{appName}</h1>
           </div>
 
           <div className="flex items-center gap-4">
