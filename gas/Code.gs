@@ -163,6 +163,13 @@ function saveLocation(d) { return saveData('LOCATIONS', 'LocationID', d); }
 function deleteLocation(id) { return deleteData('LOCATIONS', 'LocationID', id); }
 function saveVendor(d) { return saveData('VENDORS', 'VendorID', d); }
 function saveSOP(d) { return saveData('SOPS', 'SOP_ID', d); }
+function linkSOP(assetId, sopId) {
+  return saveData('ASSET_SOP', 'Link_ID', {
+    Link_ID: 'LNK-' + Date.now(),
+    AssetID_Ref: assetId,
+    SOP_ID_Ref: sopId
+  });
+}
 function saveSchedule(d) { return saveData('SCHEDULES', 'PM_ID', d); }
 function saveMapping(d) { return saveData('MAPPINGS', 'MappingID', d); }
 function deleteMapping(id) { return deleteData('MAPPINGS', 'MappingID', id); }
