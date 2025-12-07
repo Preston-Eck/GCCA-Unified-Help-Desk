@@ -39,37 +39,55 @@ const DB_CACHE = {
 const normEmail = (email: string) => email ? email.trim().toLowerCase() : '';
 
 export const initDatabase = async () => {
-  const data = await runServer('getDatabaseData');
-  if (data) {
-    DB_CACHE.users = (data.USERS || []).map((u: any) => ({ ...u, Email: normEmail(u.Email) }));
-    DB_CACHE.tickets = data.TICKETS || [];
-    DB_CACHE.tasks = data.TASKS || [];
-    DB_CACHE.materials = data.MATERIALS || [];
-    DB_CACHE.campuses = data.CAMPUSES || [];
-    DB_CACHE.buildings = data.BUILDINGS || [];
-    DB_CACHE.locations = data.LOCATIONS || [];
-    DB_CACHE.assets = data.ASSETS || [];
-    DB_CACHE.vendors = (data.VENDORS || []).map((v: any) => ({ ...v, Vendor_Name: v.Vendor_Name || v.CompanyName }));
-    DB_CACHE.sops = data.SOPS || [];
-    DB_CACHE.schedules = (data.SCHEDULES || []).map((s: any) => ({ ...s, PM_ID: s.PM_ID || s.ScheduleID, Next_Due_Date: s.Next_Due_Date || s.NextDue }));
-    DB_CACHE.documents = data.DOCS || [];
-    DB_CACHE.roles = (data.ROLES || []).map((r: any) => ({ ...r, Permissions: r.Permissions ? r.Permissions.split(',') : [] }));
-    DB_CACHE.mappings = data.MAPPINGS || [];
-    if (data.CONFIG) DB_CACHE.config = data.CONFIG;
-    DB_CACHE.ticketAttachments = data.TICKET_ATTACHMENTS || data.ATTACHMENTS || [];
-    DB_CACHE.bids = data.BIDS || [];
-    DB_CACHE.reviews = data.REVIEWS || [];
-    DB_CACHE.accountRequests = data.REQUESTS || [];
-    DB_CACHE.loaded = true;
-    return true;
+  try {
+    const data = await runServer('getDatabaseData');
+    if (data) {
+      DB_CACHE.users = (data.USERS || []).map((u: any) => ({ ...u, Email: normEmail(u.Email) }));
+      DB_CACHE.tickets = data.TICKETS || [];
+      DB_CACHE.tasks = data.TASKS || [];
+      DB_CACHE.materials = data.MATERIALS || [];
+      DB_CACHE.campuses = data.CAMPUSES || [];
+      DB_CACHE.buildings = data.BUILDINGS || [];
+      DB_CACHE.locations = data.LOCATIONS || [];
+      DB_CACHE.assets = data.ASSETS || [];
+      DB_CACHE.vendors = (data.VENDORS || []).map((v: any) => ({
+        ...v, 
+        Vendor_Name: v.Vendor_Name || v.CompanyName 
+      }));
+      DB_CACHE.sops = data.SOPS || [];
+      DB_CACHE.schedules = (data.SCHEDULES || []).map((s: any) => ({
+          ...s,
+          PM_ID: s.PM_ID || s.ScheduleID,
+          Next_Due_Date: s.Next_Due_Date || s.NextDue
+      }));
+      DB_CACHE.documents = data.DOCS || [];
+      
+      DB_CACHE.roles = (data.ROLES || []).map((r: any) => ({
+        ...r, Permissions: r.Permissions ? r.Permissions.split(',') : []
+      }));
+      
+      DB_CACHE.mappings = data.MAPPINGS || [];
+      if (data.CONFIG) DB_CACHE.config = data.CONFIG;
+      
+      DB_CACHE.ticketAttachments = data.TICKET_ATTACHMENTS || data.ATTACHMENTS || [];
+      DB_CACHE.bids = data.BIDS || [];
+      DB_CACHE.reviews = data.REVIEWS || [];
+      DB_CACHE.accountRequests = data.REQUESTS || [];
+
+      DB_CACHE.loaded = true;
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.error("Init failed:", e);
+    return false;
   }
-  return false;
 };
 
 // --- GETTERS ---
 export const getUsers = () => DB_CACHE.users;
 export const getTickets = () => DB_CACHE.tickets;
-export const getTicketsForUser = (user: T.User) => DB_CACHE.tickets;
+export const getTicketsForUser = (user: T.User) => DB_CACHE.tickets; 
 export const getTasks = (ticketId?: string) => ticketId ? DB_CACHE.tasks.filter(t => t.TicketID_Ref === ticketId) : DB_CACHE.tasks;
 export const getInventory = () => DB_CACHE.materials;
 export const getAssets = (locId?: string) => locId ? DB_CACHE.assets.filter(a => a.LocationID_Ref === locId) : DB_CACHE.assets;
@@ -83,8 +101,8 @@ export const getAppConfig = () => DB_CACHE.config;
 export const getAllMaintenanceSchedules = () => DB_CACHE.schedules;
 export const getMaintenanceSchedules = (assetId: string) => DB_CACHE.schedules.filter(s => s.AssetID_Ref === assetId);
 export const getSOPs = () => DB_CACHE.sops;
-export const getAllSOPs = () => DB_CACHE.sops;
-export const getSOPsForAsset = (id: string) => DB_CACHE.sops; // Placeholder: Ideally filter by link table
+export const getAllSOPs = () => DB_CACHE.sops; 
+export const getSOPsForAsset = (id: string) => DB_CACHE.sops; 
 export const getAccountRequests = () => DB_CACHE.accountRequests;
 export const getTechnicians = () => DB_CACHE.users.filter(u => u.User_Type.includes('Tech'));
 export const getTicketById = (id: string) => DB_CACHE.tickets.find(t => t.TicketID === id);
@@ -110,27 +128,6 @@ export const saveMaterial = async (mat: T.Material) => {
   return runServer('saveMaterial', newMat);
 };
 
-// FIXED: Generate SOP ID client-side
-export const addSOP = async (title: string, text: string) => {
-  const newSop: T.SOP = { 
-    SOP_ID: `SOP-${Date.now()}`, 
-    SOP_Title: title, 
-    Concise_Procedure_Text: text, 
-    Google_Doc_Link: '' 
-  };
-  DB_CACHE.sops.push(newSop);
-  await runServer('saveSOP', newSop);
-  return newSop;
-};
-
-// FIXED: Generate PM ID client-side
-export const saveMaintenanceSchedule = async (s: T.MaintenanceSchedule) => {
-  const newSchedule = { ...s, PM_ID: s.PM_ID || `PM-${Date.now()}` };
-  const idx = DB_CACHE.schedules.findIndex(x => x.PM_ID === newSchedule.PM_ID);
-  if (idx >= 0) DB_CACHE.schedules[idx] = newSchedule; else DB_CACHE.schedules.push(newSchedule);
-  return runServer('saveSchedule', newSchedule);
-};
-
 export const saveTicket = (t: T.Ticket) => runServer('saveTicket', t);
 export const submitTicket = (email: string, data: any) => {
     return runServer('saveTicket', { ...data, Submitter_Email: email, Date_Submitted: new Date().toISOString() });
@@ -150,8 +147,14 @@ export const saveBuilding = (b: T.Building) => runServer('saveBuilding', b);
 export const deleteBuilding = (id: string) => runServer('deleteBuilding', id);
 export const saveLocation = (l: T.Location) => runServer('saveLocation', l);
 export const deleteLocation = (id: string) => runServer('deleteLocation', id);
+
+export const addBuilding = (c: string, n: string) => runServer('saveBuilding', { CampusID_Ref: c, Building_Name: n });
+export const addLocation = (b: string, n: string) => runServer('saveLocation', { BuildingID_Ref: b, Location_Name: n });
+export const addAsset = (l: string, n: string) => runServer('saveAsset', { LocationID_Ref: l, Asset_Name: n });
+
 export const saveMapping = (m: T.FieldMapping) => runServer('saveMapping', m);
 export const deleteFieldMapping = (id: string) => runServer('deleteMapping', id);
+export const saveFieldMapping = saveMapping; // Alias for backward compatibility
 
 export const fetchSchema = async () => {
   const schema = await runServer('getSchema');
@@ -171,8 +174,10 @@ export const getAttachments = (id: string) => DB_CACHE.ticketAttachments.filter(
 export const getAttachmentsForBid = (bidId: string) => []; 
 export const getVendorHistory = (id: string) => DB_CACHE.bids.filter(b => b.VendorID_Ref === id);
 export const getOpenTicketsForVendors = () => DB_CACHE.tickets.filter(t => t.Status === 'Open for Bid');
+
 export const rejectAccountRequest = (id: string) => runServer('deleteAccountRequest', id);
 export const submitAccountRequest = (d: any) => runServer('submitAccountRequest', d);
+
 export const updateAppConfig = (c: T.SiteConfig) => runServer('updateConfig', c);
 export const saveRole = (r: any) => runServer('saveRole', r);
 export const deleteRole = (id: string) => runServer('deleteRole', id);
@@ -185,13 +190,13 @@ export const addTicketComment = (id: string, email: string, text: string) => run
 export const toggleTicketPublic = (id: string, v: boolean) => runServer('saveTicket', { TicketID: id, Is_Public: v });
 export const mergeTickets = () => console.log("Merge not impl");
 export const checkAndGeneratePMTickets = () => 0;
+export const addSOP = (t: string, c: string) => runServer('saveSOP', { SOP_Title: t, Concise_Procedure_Text: c });
 export const deleteSOP = (id: string) => runServer('deleteSOP', id);
 export const linkSOPToAsset = (a: string, s: string) => runServer('linkSOP', a, s);
 export const updateSOP = (s: T.SOP) => runServer('saveSOP', s);
 export const deleteMaintenanceSchedule = (id: string) => runServer('deleteMaintenanceSchedule', id);
-export const addBuilding = (c: string, n: string) => runServer('saveBuilding', { CampusID_Ref: c, Building_Name: n });
-export const addLocation = (b: string, n: string) => runServer('saveLocation', { BuildingID_Ref: b, Location_Name: n });
-export const addAsset = (l: string, n: string) => runServer('saveAsset', { LocationID_Ref: l, Asset_Name: n });
+export const saveMaintenanceSchedule = (s: T.MaintenanceSchedule) => runServer('saveSchedule', s);
+
 export const registerVendor = (v: any) => runServer('saveVendor', v);
 export const uploadFile = async (file: File, ticketId: string) => {
   return new Promise((resolve, reject) => {

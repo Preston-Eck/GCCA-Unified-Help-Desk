@@ -1,3 +1,5 @@
+// types.ts
+
 // --- 1. CORE CONFIGURATION ---
 export interface SiteConfig {
   appName: string;
@@ -91,6 +93,8 @@ export interface MeterReading {
 }
 
 // --- 5. WORKFLOW (Tickets & Tasks) ---
+
+// RESTORED ENUMS TO PREVENT REGRESSION
 export enum Priority {
   LOW = 'Low',
   MEDIUM = 'Medium',
@@ -119,7 +123,7 @@ export interface Ticket {
   Title: string;
   Description: string;
   Category: string;
-  Status: string; 
+  Status: string; // Compatible with string from CSV
   Priority?: string;
   Assigned_Staff?: string;
   Assigned_VendorID_Ref?: string;
@@ -181,18 +185,6 @@ export interface Material {
   Reorder_Point: number;
 }
 
-export interface MaterialTransaction {
-  UsedID: string;
-  TicketID_Ref?: string;
-  TaskID_Ref?: string;
-  AssetID_Ref?: string;
-  LocationID_Ref?: string;
-  MaterialID_Ref: string;
-  Quantity_Used: number;
-  Timestamp: string;
-  Logged_By_Ref: string;
-}
-
 export interface PurchaseLog {
   PurchaseID: string;
   Purchase_Date: string;
@@ -200,9 +192,6 @@ export interface PurchaseLog {
   VendorID_Ref: string;
   Quantity_Purchased: number;
   Total_Cost_for_Item: number;
-  Receipt_Type?: string;
-  Receipt_Image?: string;
-  Receipt_File?: string;
 }
 
 // --- 7. VENDORS & PROCUREMENT ---

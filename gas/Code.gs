@@ -163,13 +163,6 @@ function saveLocation(d) { return saveData('LOCATIONS', 'LocationID', d); }
 function deleteLocation(id) { return deleteData('LOCATIONS', 'LocationID', id); }
 function saveVendor(d) { return saveData('VENDORS', 'VendorID', d); }
 function saveSOP(d) { return saveData('SOPS', 'SOP_ID', d); }
-function linkSOP(assetId, sopId) {
-  return saveData('ASSET_SOP', 'Link_ID', {
-    Link_ID: 'LNK-' + Date.now(),
-    AssetID_Ref: assetId,
-    SOP_ID_Ref: sopId
-  });
-}
 function saveSchedule(d) { return saveData('SCHEDULES', 'PM_ID', d); }
 function saveMapping(d) { return saveData('MAPPINGS', 'MappingID', d); }
 function deleteMapping(id) { return deleteData('MAPPINGS', 'MappingID', id); }
@@ -194,6 +187,14 @@ function getSchema() {
     }
   });
   return schema;
+}
+
+function linkSOP(assetId, sopId) {
+  return saveData('ASSET_SOP', 'Link_ID', {
+    Link_ID: 'LNK-' + Date.now(),
+    AssetID_Ref: assetId,
+    SOP_ID_Ref: sopId
+  });
 }
 
 /* =========================================
@@ -261,8 +262,6 @@ function updateSchema() {
     'Next Due Date': 'Next_Due_Date',
     'Building Floor Plan': 'Building_Floor_Plan',
     'Building Cover Photo': 'Building_Cover_Photo',
-    'Quantity on Hand': 'Quantity_on_Hand',
-    'Reorder Point': 'Reorder_Point',
     'Purchase Unit Cost': 'Purchase_Unit_Cost',
     'Items per Unit': 'Items_per_Unit'
   };
@@ -278,6 +277,10 @@ function updateSchema() {
 
     const newHeaders = headers.map(h => {
       if (renames[h]) { changed = true; return renames[h]; }
+      if (typeof h === 'string' && h.includes(' ') && !h.includes('_')) {
+         changed = true;
+         return h.replace(/ /g, '_');
+      }
       return h;
     });
     
@@ -287,6 +290,37 @@ function updateSchema() {
     }
   });
   return "Schema Sync Complete";
+}
+
+function emailDatabaseExport() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  const blobs = [];
+  
+  sheets.forEach(sheet => {
+    const name = sheet.getName();
+    const data = sheet.getDataRange().getValues();
+    const csvString = data.map(row => 
+      row.map(cell => {
+        let cellStr = String(cell).replace(/"/g, '""'); 
+        if (cellStr.search(/("|,|\n)/g) >= 0) cellStr = `"${cellStr}"`;
+        return cellStr;
+      }).join(",")
+    ).join("\n");
+    blobs.push(Utilities.newBlob(csvString, 'text/csv', `${name}.csv`));
+  });
+  
+  const zip = Utilities.zip(blobs, 'GCCA_Database_Export.zip');
+  const recipient = Session.getActiveUser().getEmail();
+  
+  MailApp.sendEmail({
+    to: recipient,
+    subject: "GCCA Database CSV Export",
+    body: "Attached is the full export of your spreadsheet tables.",
+    attachments: [zip]
+  });
+  
+  return "Sent export to " + recipient;
 }
 /* =========================================
    6. DEBUG & EXPORT TOOLS
