@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User } from './types';
 import { getSessionUserEmail } from './services/api';
 import { initDatabase, getUsers, hasPermission } from './services/dataService';
-import { Loader2, Users, Shield, Database, Briefcase, Settings, Calendar, LogOut, Map, Package } from 'lucide-react';
+import { Loader2, Users, Shield, Database, Briefcase, Settings, Calendar, LogOut, Map as MapIcon, Package } from 'lucide-react';
 
 // Components
 import TicketForm from './components/TicketForm';
@@ -16,7 +16,7 @@ import RoleManager from './components/RoleManager';
 import UserManager from './components/UserManager';
 import VendorManager from './components/VendorManager';
 import CampusManager from './components/CampusManager';
-import InventoryManager from './components/InventoryManager'; // <--- ENABLED
+import InventoryManager from './components/InventoryManager'; 
 
 // --- CONFIG ---
 const SUPER_ADMIN_EMAIL = 'preston@grovecitychristianacademy.com';
@@ -38,6 +38,7 @@ export default function App() {
         setAllUsers(users);
 
         let email = await getSessionUserEmail();
+        // Fallback to local storage if Google Session fails (common in IFrames)
         if (!email || email === '') {
            const storedEmail = localStorage.getItem(STORAGE_KEY);
            if (storedEmail) email = storedEmail;
@@ -45,8 +46,27 @@ export default function App() {
         
         if (email && email !== '') {
            setRealUserEmail(email);
-           const foundUser = users.find((u: User) => u.Email.toLowerCase() === email.toLowerCase());
-           if (foundUser) setCurrentUser(foundUser);
+           const normEmail = email.trim().toLowerCase();
+           
+           // 1. Try strict DB match
+           const foundUser = users.find((u: User) => u.Email.toLowerCase() === normEmail);
+           
+           if (foundUser) {
+             setCurrentUser(foundUser);
+           } 
+           // 2. FAILSAFE: Super Admin Override
+           // If DB is broken or user missing, let the Admin in to fix it.
+           else if (normEmail === SUPER_ADMIN_EMAIL.toLowerCase()) {
+             console.warn("Using Super Admin Override");
+             setCurrentUser({
+               UserID: 'ADMIN_OVERRIDE',
+               Email: email,
+               Name: 'Super Admin (Recovery)',
+               User_Type: 'Super Admin, Chair, Admin',
+               Department: 'IT',
+               Account_Status: 'Active'
+             });
+           }
         }
       } catch (err) {
         console.error("Init failed:", err);
@@ -58,6 +78,21 @@ export default function App() {
   }, [refreshKey]);
 
   const handleManualLogin = (email: string) => {
+    // Also apply override logic to manual login
+    if (email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+      localStorage.setItem(STORAGE_KEY, email);
+      setRealUserEmail(email);
+      setCurrentUser({
+         UserID: 'ADMIN_OVERRIDE',
+         Email: email,
+         Name: 'Super Admin (Recovery)',
+         User_Type: 'Super Admin, Chair, Admin',
+         Department: 'IT',
+         Account_Status: 'Active'
+      });
+      return;
+    }
+
     const user = allUsers.find(u => u.Email.toLowerCase() === email.toLowerCase());
     if (user) {
       localStorage.setItem(STORAGE_KEY, email);
@@ -78,8 +113,20 @@ export default function App() {
 
   const handleRoleSwitch = (targetEmail: string) => {
     if (targetEmail === 'REAL_USER') {
-       const me = allUsers.find(u => u.Email.toLowerCase() === realUserEmail.toLowerCase());
-       if (me) setCurrentUser(me);
+       // Reset to self (or override if self not in DB)
+       if (realUserEmail.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+         setCurrentUser({
+            UserID: 'ADMIN_OVERRIDE',
+            Email: realUserEmail,
+            Name: 'Super Admin (Recovery)',
+            User_Type: 'Super Admin',
+            Department: 'IT',
+            Account_Status: 'Active'
+         });
+       } else {
+         const me = allUsers.find(u => u.Email.toLowerCase() === realUserEmail.toLowerCase());
+         if (me) setCurrentUser(me);
+       }
     } else {
        const targetUser = allUsers.find(u => u.Email === targetEmail);
        if (targetUser) setCurrentUser(targetUser);
@@ -122,7 +169,7 @@ export default function App() {
                   value={currentUser.Email}
                   onChange={(e) => handleRoleSwitch(e.target.value)}
                 >
-                  <option className="text-black" value={realUserEmail}>Viewing as: Myself</option>
+                  <option className="text-black" value="REAL_USER">Viewing as: Myself</option>
                   <optgroup className="text-black" label="Switch View">
                     {allUsers.map(u => (
                       <option key={u.UserID} value={u.Email}>
@@ -165,7 +212,7 @@ export default function App() {
                   <Database className="w-4 h-4" /> Assets
                 </button>
                 <button onClick={() => setView('campuses')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${view === 'campuses' ? 'bg-[#355E3B] text-white' : 'bg-white hover:bg-gray-50 shadow-sm'}`}>
-                  <Map className="w-4 h-4" /> Campuses
+                  <MapIcon className="w-4 h-4" /> Campuses
                 </button>
              </>
            )}
