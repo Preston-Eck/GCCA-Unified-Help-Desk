@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchSchema, getMappings, saveFieldMapping, deleteFieldMapping, addColumnToSheet, APP_FIELDS } from '../services/dataService';
+import { fetchSchema, getMappings, saveMapping, deleteFieldMapping, addColumnToSheet, APP_FIELDS } from '../services/dataService';
 import { FieldMapping } from '../types';
 import { Database, ArrowRight, RefreshCw, Trash2, Plus, AlertCircle, Wand2, FileSpreadsheet, LayoutGrid, Lock, AlertTriangle } from 'lucide-react';
 
@@ -139,7 +139,7 @@ const MappingDashboard: React.FC = () => {
   
   // Sets for fast lookup in child components
   const usedColumns = new Set(currentMappings.map(m => m.SheetHeader));
-  const usedFields = new Set(mappings.map(m => m.AppFieldID)); // Globally used fields (across all sheets? Usually 1:1 map is safer)
+  const usedFields = new Set(mappings.map(m => m.AppFieldID)); 
 
   // Reports
   const unmappedColumns = currentSheetColumns.filter(col => !usedColumns.has(col));
@@ -149,7 +149,7 @@ const MappingDashboard: React.FC = () => {
     const nextUnusedField = unmappedAppFields[0]?.id || APP_FIELDS[0].id;
     const nextUnusedCol = unmappedColumns[0] || '';
 
-    saveFieldMapping({
+    saveMapping({
       MappingID: '',
       SheetName: activeTab,
       SheetHeader: nextUnusedCol,
@@ -160,7 +160,7 @@ const MappingDashboard: React.FC = () => {
 
   const handleUpdate = (m: FieldMapping, field: keyof FieldMapping, val: string) => {
     const updated = { ...m, [field]: val };
-    saveFieldMapping(updated); 
+    saveMapping(updated); 
     setMappings(prev => prev.map(pm => pm.MappingID === m.MappingID ? updated : pm));
   };
 
@@ -181,7 +181,7 @@ const MappingDashboard: React.FC = () => {
       const res = await addColumnToSheet(activeTab, suggestedHeader);
       if (res && res.success) {
         await loadData(); 
-        await saveFieldMapping({
+        await saveMapping({
            MappingID: '',
            SheetName: activeTab,
            SheetHeader: suggestedHeader,
@@ -208,7 +208,7 @@ const MappingDashboard: React.FC = () => {
       });
 
       if (match) {
-        saveFieldMapping({
+        saveMapping({
           MappingID: '',
           SheetName: activeTab,
           SheetHeader: col,
