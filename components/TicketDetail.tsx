@@ -21,19 +21,27 @@ const TicketDetail: React.FC<Props> = ({ ticket, user, onClose, onUpdate }) => {
   const [showMerge, setShowMerge] = useState(false);
   const [mergeTarget, setMergeTarget] = useState('');
 
-  // Safe Permissions Checks
+  // --- SAFE PERMISSIONS CHECK ---
   const userType = user?.User_Type || '';
-  const isParent = userType.includes('Parent');
-  const isApprover = userType.includes('Approver');
+  
+  // FIX: Only hide features if the user is a Parent AND nothing else
+  const isRestrictedParent = userType.includes('Parent') && 
+                             !userType.includes('Admin') && 
+                             !userType.includes('Chair') && 
+                             !userType.includes('Staff') && 
+                             !userType.includes('Tech') &&
+                             !userType.includes('Approver');
+
+  // Privileged Roles
   const isChair = userType.includes('Chair');
-  const isTech = userType.includes('Tech');
   const isAdmin = userType.includes('Admin');
   const isBoard = userType.includes('Board');
+  const isTech = userType.includes('Tech');
 
-  const canEdit = !isParent && (isApprover || isChair || isTech || isAdmin || isBoard);
+  // Capabilities
+  const canEdit = !isRestrictedParent; // Anyone but a restricted parent can add info/edit
   const canAssign = isChair || isAdmin || isBoard;
-  const canViewBids = isChair || isAdmin || isBoard;
-  const canManage = isChair || isAdmin || isBoard;
+  const canManage = isChair || isAdmin || isBoard; // Advanced actions (Merge, Public, Bids)
 
   useEffect(() => {
     if (!ticket) return; 
@@ -45,10 +53,10 @@ const TicketDetail: React.FC<Props> = ({ ticket, user, onClose, onUpdate }) => {
     }
     
     if (canAssign) setTechs(getTechnicians() || []);
-    if (canViewBids) {
+    if (canManage) {
       setBids(getBidsForTicket(ticket.TicketID) || []);
     }
-  }, [ticket, canAssign, canViewBids]);
+  }, [ticket, canAssign, canManage]);
 
   const handleStatusChange = (status: string) => {
     updateTicketStatus(ticket.TicketID, status, user.Email);
@@ -142,11 +150,11 @@ const TicketDetail: React.FC<Props> = ({ ticket, user, onClose, onUpdate }) => {
                    )}
                  </div>
 
-                 {/* TASK MANAGER (New) */}
-                 {!isParent && <TaskManager ticketId={ticket.TicketID} />}
+                 {/* TASK MANAGER (Now visible for Admins/Staff even if they are Parents) */}
+                 {!isRestrictedParent && <TaskManager ticketId={ticket.TicketID} />}
 
                  {/* AI Plan */}
-                 {ticket.AI_Suggested_Plan && !isParent && (
+                 {ticket.AI_Suggested_Plan && !isRestrictedParent && (
                    <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
                      <h3 className="text-xs font-bold text-indigo-800 uppercase mb-2 flex items-center gap-2">
                        <Settings className="w-4 h-4"/> AI Suggested Plan
@@ -183,7 +191,7 @@ const TicketDetail: React.FC<Props> = ({ ticket, user, onClose, onUpdate }) => {
                      <MessageSquare className="w-4 h-4"/> Case History
                    </h3>
                    <div className="space-y-4">
-                     {(ticket.Comments || []).map((c: any, idx: number) => (
+                     {(Array.isArray(ticket.Comments) ? ticket.Comments : []).map((c: any, idx: number) => (
                        <div key={idx} className={`flex gap-3`}>
                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 border-white shadow-sm bg-[#355E3B] text-white`}>
                            <UserIcon className="w-4 h-4"/>

@@ -58,16 +58,14 @@ function getDatabaseData() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const data = {};
-    
     Object.keys(TABS).forEach(key => {
       const sheetName = TABS[key];
       const sheet = ss.getSheetByName(sheetName);
       data[key] = sheet ? sheetToJson(sheet) : [];
     });
-    
     return data;
   } catch (e) {
-    Logger.log("CRITICAL ERROR IN getDatabaseData: " + e.toString());
+    Logger.log("CRITICAL ERROR: " + e.toString());
     throw e;
   }
 }
@@ -75,19 +73,14 @@ function getDatabaseData() {
 function sheetToJson(sheet) {
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return [];
-  
   const headers = values[0].map(h => String(h).trim());
   const data = values.slice(1);
-  
   return data.map(row => {
     let obj = {};
     headers.forEach((h, i) => {
        if (!h) return;
        let val = row[i];
-       // CRITICAL FIX: Convert Dates to Strings to prevent client crash
-       if (val instanceof Date) {
-         val = val.toISOString();
-       }
+       if (val instanceof Date) val = val.toISOString();
        obj[h] = val;
     });
     return obj;
@@ -106,9 +99,10 @@ function saveData(tabKey, idCol, dataObj) {
 
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
   
-  // Add missing columns dynamically
+  // Dynamic Columns
   Object.keys(dataObj).forEach(k => {
-    if (headers.indexOf(k) === -1) {
+    // Case insensitive check for existing column
+    if (headers.findIndex(h => h.toLowerCase() === k.toLowerCase()) === -1) {
       sheet.getRange(1, headers.length + 1).setValue(k);
       headers.push(k);
     }
@@ -116,20 +110,29 @@ function saveData(tabKey, idCol, dataObj) {
 
   const allData = sheet.getDataRange().getValues();
   const idValue = dataObj[idCol];
-  // Case insensitive header match
   const idIndex = headers.findIndex(h => h.toLowerCase() === idCol.toLowerCase());
 
   if (idValue && idIndex !== -1) {
     for (let i = 1; i < allData.length; i++) {
       if (String(allData[i][idIndex]) === String(idValue)) {
-        const newRow = headers.map(h => dataObj.hasOwnProperty(h) ? dataObj[h] : allData[i][headers.indexOf(h)]);
+        // Map dataObj keys to correct column index (case insensitive)
+        const newRow = headers.map(h => {
+          const key = Object.keys(dataObj).find(k => k.toLowerCase() === h.toLowerCase());
+          return key ? dataObj[key] : allData[i][headers.indexOf(h)];
+        });
+        
         sheet.getRange(i + 1, 1, 1, newRow.length).setValues([newRow]);
         return { success: true, action: 'updated', id: idValue };
       }
     }
   }
 
-  const newRow = headers.map(h => dataObj[h] || '');
+  // Create New
+  const newRow = headers.map(h => {
+     const key = Object.keys(dataObj).find(k => k.toLowerCase() === h.toLowerCase());
+     return key ? dataObj[key] : '';
+  });
+  
   sheet.appendRow(newRow);
   return { success: true, action: 'created', id: idValue };
 }
@@ -139,7 +142,6 @@ function deleteData(tabKey, idCol, idValue) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) return { success: false };
-  
   const data = sheet.getDataRange().getValues();
   const headers = data[0].map(h => String(h).trim());
   const colIdx = headers.findIndex(h => h.toLowerCase() === idCol.toLowerCase());
@@ -155,7 +157,7 @@ function deleteData(tabKey, idCol, idValue) {
   return { success: false, message: 'ID not found' };
 }
 
-// --- PUBLIC EXPORTS (Must match dataService.ts exactly) ---
+// EXPORTS
 function saveTicket(d) { return saveData('TICKETS', 'TicketID', d); }
 function saveTask(d) { return saveData('TASKS', 'TaskID', d); }
 function saveUser(d) { return saveData('USERS', 'UserID', d); }
@@ -174,19 +176,39 @@ function saveSOP(d) { return saveData('SOPS', 'SOP_ID', d); }
 function saveSchedule(d) { return saveData('SCHEDULES', 'PM_ID', d); }
 function saveMapping(d) { return saveData('MAPPINGS', 'MappingID', d); }
 function deleteMapping(id) { return deleteData('MAPPINGS', 'MappingID', id); }
-function updateConfig(d) { return saveData('CONFIG', 'appName', d); } 
-function linkSOP(assetId, sopId) { return saveData('ASSET_SOP', 'Link_ID', { Link_ID: 'LNK-' + Date.now(), AssetID_Ref: assetId, SOP_ID_Ref: sopId }); }
+function updateConfig(d) { return saveData('CONFIG', 'appName', d); }
+function saveRole(d) { return saveData('ROLES', 'RoleName', d); }
+function deleteRole(id) { return deleteData('ROLES', 'RoleName', id); }
+function saveComment(d) { return saveData('COMMENTS', 'CommentID', d); }
+
+function linkSOP(assetId, sopId) {
+  return saveData('ASSET_SOP', 'Link_ID', {
+    Link_ID: 'LNK-' + Date.now(),
+    AssetID_Ref: assetId,
+    SOP_ID_Ref: sopId
+  });
+}
 function addColumn(sheet, header) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const s = ss.getSheetByName(sheet);
   if(s) s.getRange(1, s.getLastColumn()+1).setValue(header);
   return {success: true};
 }
+function getSchema() {
+  const data = getDatabaseData();
+  const schema = {};
+  Object.keys(data).forEach(k => {
+    if (data[k].length > 0) {
+      schema[k] = Object.keys(data[k][0]);
+    } else {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sheet = ss.getSheetByName(TABS[k]);
+      schema[k] = sheet ? sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0] : [];
+    }
+  });
+  return schema;
+}
 
-// NEW: Save Comment to COMMENTS table
-function saveComment(d) { return saveData('COMMENTS', 'CommentID', d); }
-
-// ... (Utils: OTP, AI, Upload) ...
 function requestOtp(email) {
   email = email.trim().toLowerCase();
   const data = getDatabaseData();
@@ -201,7 +223,6 @@ function requestOtp(email) {
     return { success: true };
   } catch (e) { return { success: false, message: e.toString() }; }
 }
-
 function verifyOtp(email, code) {
   const c = CacheService.getScriptCache();
   if (c.get("OTP_" + email.trim().toLowerCase()) === code) {
@@ -210,7 +231,6 @@ function verifyOtp(email, code) {
   }
   return false;
 }
-
 function uploadFile(data, filename, mimeType, parentId) {
   try {
     const folder = DriveApp.getFolderById(SCRIPT_PROP.getProperty('DRIVE_FOLDER_ID'));
@@ -223,7 +243,6 @@ function uploadFile(data, filename, mimeType, parentId) {
     return file.getUrl();
   } catch (e) { throw new Error(e.toString()); }
 }
-
 function callGemini(prompt) {
   const key = SCRIPT_PROP.getProperty('GEMINI_API_KEY');
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
@@ -235,9 +254,33 @@ function callGemini(prompt) {
     return JSON.parse(UrlFetchApp.fetch(url, options).getContentText()).candidates[0].content.parts[0].text;
   } catch (e) { return "AI Unavailable"; }
 }
-
-function updateSchema() { return "Schema Sync Complete"; } // Placeholder to prevent errors if called
-
+function updateSchema() { return "Schema Sync Complete"; }
+function emailDatabaseExport() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  const blobs = [];
+  sheets.forEach(sheet => {
+    const name = sheet.getName();
+    const data = sheet.getDataRange().getValues();
+    const csvString = data.map(row => 
+      row.map(cell => {
+        let cellStr = String(cell).replace(/"/g, '""'); 
+        if (cellStr.search(/("|,|\n)/g) >= 0) cellStr = `"${cellStr}"`;
+        return cellStr;
+      }).join(",")
+    ).join("\n");
+    blobs.push(Utilities.newBlob(csvString, 'text/csv', `${name}.csv`));
+  });
+  const zip = Utilities.zip(blobs, 'GCCA_Database_Export.zip');
+  const recipient = Session.getActiveUser().getEmail();
+  MailApp.sendEmail({
+    to: recipient,
+    subject: "GCCA Database CSV Export",
+    body: "Attached is the full export of your spreadsheet tables.",
+    attachments: [zip]
+  });
+  return "Sent export to " + recipient;
+}
 /* =========================================
    6. DEBUG & EXPORT TOOLS
    ========================================= */
