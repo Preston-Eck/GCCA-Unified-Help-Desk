@@ -21,17 +21,19 @@ const MOCK_DATA: Record<string, any[]> = {
   ],
   'KBArticles': [],
   'Users': [
-     { id: 'u1', name: 'Demo User', email: 'demo@gcca.org', role: 'Admin', department: 'IT', status: 'Active' }
+     { id: 'u1', name: 'Demo User', email: 'demo@gcca.org', role: 'Admin', department: 'IT', status: 'Active' },
+     { id: 'u2', name: 'Preston Eck', email: 'preston@grovecitychristianacademy.com', role: 'Admin', department: 'IT', status: 'Active' }
   ],
   'AccountRequests': [],
   'Vendors': []
 };
 
 // ==========================================
-// 2. GENERIC HELPERS
+// 2. GENERIC HELPERS (Synchronous Read, Async Write)
 // ==========================================
-export const getItems = async (listName: string): Promise<any[]> => {
-  await new Promise(resolve => setTimeout(resolve, 50));
+
+// CHANGED: Removed async to prevent UI crashes
+export const getItems = (listName: string): any[] => {
   return MOCK_DATA[listName] || [];
 };
 
@@ -73,12 +75,13 @@ export const getTechnicians = async () => [
 
 export const hasPermission = (user: any, permission: string) => true;
 
+// Helper must remain object but return sync data
 export const lookup = {
-  campus: async (q: string) => getItems('Campuses'),
-  building: async (q: string) => getItems('Buildings'),
-  location: async (q: string) => getItems('Locations'),
-  asset: async (q: string) => getItems('Assets'),
-  user: async (q: string) => [{ id: 'u1', name: 'User 1' }]
+  campus: (q: string) => getItems('Campuses'),
+  building: (q: string) => getItems('Buildings'),
+  location: (q: string) => getItems('Locations'),
+  asset: (q: string) => getItems('Assets'),
+  user: (q: string) => [{ id: 'u1', name: 'User 1' }]
 };
 
 // --- Tickets ---
@@ -86,12 +89,13 @@ export const submitTicket = async (arg1: string | any, arg2?: any): Promise<any>
   if (typeof arg1 === 'string') return addItem(arg1, arg2);
   return addItem('Tickets', arg1);
 };
+
 export const getTickets = () => getItems('Tickets');
 
-export const getTicketsForUser = async (userId: string) => getItems('Tickets');
+export const getTicketsForUser = (userId: string) => getItems('Tickets');
 
-export const getTicketById = async (id: string) => {
-    const tickets = await getItems('Tickets');
+export const getTicketById = (id: string) => {
+    const tickets = getItems('Tickets');
     return tickets.find(t => t.id === id);
 };
 
@@ -113,7 +117,7 @@ export const getAllSOPs = () => getItems('SOPs');
 export const saveSOP = (sop: any) => sop.id ? updateItem('SOPs', sop.id, sop) : addItem('SOPs', sop);
 export const deleteSOP = (id: string) => deleteItem('SOPs', id);
 export const updateSOP = (id: string, data: any) => updateItem('SOPs', id, data);
-export const getSOPsForAsset = async (assetId: string) => [];
+export const getSOPsForAsset = (assetId: string) => [];
 export const linkSOPToAsset = async (sopId: string, assetId: string) => {};
 export const addSOP = (data: any) => addItem('SOPs', data);
 
@@ -134,7 +138,6 @@ export const deleteInventoryItem = (id: string) => deleteItem('Inventory', id);
 // Alias for InventoryManager
 export const getInventory = () => getItems('Inventory');
 export const saveMaterial = (mat: any) => mat.id ? updateItem('Inventory', mat.id, mat) : addItem('Inventory', mat);
-
 
 // --- Asset Manager Specifics ---
 export const getCampuses = (query?: any) => getItems('Campuses');
@@ -207,7 +210,7 @@ export const fetchSchema = async (sheetId: string) => {
   ];
 };
 
-export const getMappings = async (sheetId: string) => getItems('Mappings');
+export const getMappings = (sheetId: string) => getItems('Mappings');
 
 export const saveMapping = (mapping: any) => {
   return mapping.id ? updateItem('Mappings', mapping.id, mapping) : addItem('Mappings', mapping);
@@ -228,8 +231,7 @@ let MOCK_CONFIG: SiteConfig = {
     primaryColor: '#2563eb'
 };
 
-export const getAppConfig = async (): Promise<SiteConfig> => {
-    await new Promise(resolve => setTimeout(resolve, 200));
+export const getAppConfig = (): SiteConfig => {
     return MOCK_CONFIG;
 };
 
@@ -241,20 +243,15 @@ export const updateAppConfig = async (config: Partial<SiteConfig>): Promise<Site
 
 // --- Auth ---
 
-export const requestOtp = async (email: string): Promise<void> => {
+export const requestOtp = async (email: string): Promise<{ success: boolean; message?: string }> => {
   await new Promise(resolve => setTimeout(resolve, 500));
   console.log(`OTP requested for ${email}`);
+  return { success: true };
 };
 
-export const verifyOtp = async (email: string, otp: string): Promise<User> => {
+export const verifyOtp = async (email: string, otp: string): Promise<boolean> => {
   await new Promise(resolve => setTimeout(resolve, 500));
-  return {
-    id: 'u1',
-    name: 'Demo User',
-    email: email,
-    role: 'Admin',
-    department: 'IT'
-  };
+  return true; 
 };
 
 // --- Role Management ---
@@ -303,9 +300,9 @@ export const saveVendor = (vendor: any) => {
 
 export const updateVendorStatus = (id: string, status: string) => updateItem('Vendors', id, { status });
 
-export const getVendorHistory = async (id: string) => [];
+export const getVendorHistory = (id: string) => [];
 
-// --- Init Database (FIXED: Added this missing export) ---
+// --- Init Database ---
 
 export const initDatabase = async () => {
     await new Promise(resolve => setTimeout(resolve, 100));

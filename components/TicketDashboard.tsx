@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Ticket, User, Priority, TicketStatus } from '../types';
+import { Ticket, User, Priority } from '../types';
 import { getTicketsForUser, getAllMaintenanceSchedules, claimTicket, hasPermission, lookup } from '../services/dataService';
-import { AlertCircle, CheckCircle2, Calendar, Inbox, History, Globe, Building2, Briefcase, Filter, Search } from 'lucide-react';
+import { AlertCircle, Calendar, Inbox, Globe, Filter } from 'lucide-react';
 import TicketDetail from './TicketDetail';
 
 interface Props {
@@ -18,59 +18,67 @@ const TicketDashboard: React.FC<Props> = ({ user, refreshKey, onRefresh }) => {
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
 
-  // --- PERMISSIONS CHECKS ---
+  // --- PERMISSIONS CHECKS (FIXED: Updated property names) ---
+  // Note: hasPermission implementation in dataService returns true for everything in mock mode
   const canApprove = hasPermission(user, 'APPROVE_TICKETS');
   const canClaim = hasPermission(user, 'CLAIM_TICKETS');
-  const viewDept = hasPermission(user, 'VIEW_DEPT_TICKETS');
-  const viewCampus = hasPermission(user, 'VIEW_CAMPUS_TICKETS');
-  const viewBids = hasPermission(user, 'VIEW_ALL_BIDS');
   const manageAssets = hasPermission(user, 'MANAGE_ASSETS');
 
-  const isRestrictedParent = user.User_Type.includes('Parent') && 
-                             !user.User_Type.includes('Admin') && 
-                             !user.User_Type.includes('Chair') && 
-                             !user.User_Type.includes('Staff');
+  // FIXED: user.User_Type -> user.role
+  const isRestrictedParent = user.role.includes('Parent') && 
+                             !user.role.includes('Admin') && 
+                             !user.role.includes('Chair') && 
+                             !user.role.includes('Staff');
 
   useEffect(() => {
     if (isRestrictedParent) setView('PUBLIC_BOARD');
     else if (canApprove) setView('ACTION_REQUIRED');
-    setTickets(getTicketsForUser(user)); 
+    
+    // getTicketsForUser is now synchronous in the fix, so we can set it directly
+    const userTickets = getTicketsForUser(user.id);
+    setTickets(userTickets); 
   }, [user, refreshKey, canApprove, isRestrictedParent]);
 
   const filteredTickets = useMemo(() => {
     let filtered = tickets;
 
     // View Filters
-    if (view === 'MY_TICKETS') filtered = filtered.filter(t => t.Submitter_Email === user.Email);
+    // FIXED: t.Submitter_Email -> t.createdBy, user.Email -> user.email
+    if (view === 'MY_TICKETS') filtered = filtered.filter(t => t.createdBy === user.email);
     else if (view === 'ACTION_REQUIRED') {
-      if (canApprove) filtered = filtered.filter(t => t.Status === 'Pending Approval');
-      else if (canClaim) filtered = filtered.filter(t => t.Status === 'New');
+      // FIXED: t.Status -> t.status
+      if (canApprove) filtered = filtered.filter(t => t.status === 'Pending Approval');
+      else if (canClaim) filtered = filtered.filter(t => t.status === 'New');
     }
-    else if (view === 'PUBLIC_BOARD') filtered = filtered.filter(t => t.Is_Public);
-    else if (view === 'HISTORY') filtered = filtered.filter(t => t.Status !== 'New');
+    // FIXED: t.Is_Public -> t.isPublic
+    else if (view === 'PUBLIC_BOARD') filtered = filtered.filter(t => t.isPublic);
+    else if (view === 'HISTORY') filtered = filtered.filter(t => t.status !== 'New');
 
     // Search
     if (search) {
       const q = search.toLowerCase();
+      // FIXED: t.Title -> t.title, t.Description -> t.description, t.TicketID -> t.id
       filtered = filtered.filter(t => 
-        t.Title.toLowerCase().includes(q) || 
-        t.Description.toLowerCase().includes(q) ||
-        t.TicketID.toLowerCase().includes(q)
+        (t.title && t.title.toLowerCase().includes(q)) || 
+        (t.description && t.description.toLowerCase().includes(q)) ||
+        (t.id && t.id.toLowerCase().includes(q))
       );
     }
 
     // Sort
     return [...filtered].sort((a, b) => {
-      let valA: any = a.Date_Submitted;
-      let valB: any = b.Date_Submitted;
+      // FIXED: t.Date_Submitted -> t.createdAt
+      let valA: any = a.createdAt;
+      let valB: any = b.createdAt;
       
-      if (sortField === 'Status') { valA = a.Status; valB = b.Status; }
+      // FIXED: Property accessors to lowercase
+      if (sortField === 'Status') { valA = a.status; valB = b.status; }
       if (sortField === 'Priority') {
-         const pMap = { [Priority.CRITICAL]: 3, [Priority.HIGH]: 2, [Priority.MEDIUM]: 1, [Priority.LOW]: 0 };
+         const pMap = { [Priority.Critical]: 3, [Priority.High]: 2, [Priority.Medium]: 1, [Priority.Low]: 0 };
          // @ts-ignore
-         valA = pMap[a.Priority] || 0; 
+         valA = pMap[a.priority] || 0; 
          // @ts-ignore
-         valB = pMap[b.Priority] || 0;
+         valB = pMap[b.priority] || 0;
       }
 
       if (valA < valB) return sortAsc ? -1 : 1;
@@ -83,12 +91,29 @@ const TicketDashboard: React.FC<Props> = ({ user, refreshKey, onRefresh }) => {
     if (view !== 'AGENDA') return [];
     const items: any[] = [];
     tickets.forEach(t => {
-       if (t.Status !== 'Completed') items.push({ type: 'TICKET', id: t.TicketID, date: t.Date_Submitted, title: t.Title, status: t.Status, ticket: t });
+       if (t.status !== 'Completed') {
+         items.push({ 
+           type: 'TICKET', 
+           id: t.id, 
+           date: t.createdAt, 
+           title: t.title, 
+           status: t.status, 
+           ticket: t 
+         });
+       }
     });
     if (manageAssets) {
         const pms = getAllMaintenanceSchedules();
         pms.forEach(pm => {
-            items.push({ type: 'PM', id: pm.PM_ID, date: pm.Next_Due_Date, title: pm.Task_Name, status: 'Scheduled', schedule: pm });
+            // Adapted for maintenance schedule properties
+            items.push({ 
+              type: 'PM', 
+              id: pm.id, 
+              date: pm.nextDue, 
+              title: pm.task, 
+              status: 'Scheduled', 
+              schedule: pm 
+            });
         });
     }
     return items.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -102,7 +127,7 @@ const TicketDashboard: React.FC<Props> = ({ user, refreshKey, onRefresh }) => {
   const handleQuickClaim = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if(confirm("Claim this ticket?")) {
-        claimTicket(id, user.Email);
+        claimTicket(id);
         onRefresh();
     }
   };
@@ -127,13 +152,26 @@ const TicketDashboard: React.FC<Props> = ({ user, refreshKey, onRefresh }) => {
 
         {/* Main Content */}
         <div className="flex-1 bg-white rounded-lg shadow border p-4">
+           <div className="mb-4 flex gap-2">
+             <div className="relative flex-1">
+               <input 
+                 type="text" 
+                 placeholder="Search tickets..." 
+                 className="w-full pl-8 pr-4 py-2 border rounded-lg text-sm"
+                 value={search}
+                 onChange={e => setSearch(e.target.value)}
+               />
+               <Filter className="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400" />
+             </div>
+           </div>
+
            {view === 'AGENDA' ? (
               <table className="w-full text-left text-sm">
                   <thead className="bg-gray-100 font-bold"><tr><th className="p-3">Date</th><th className="p-3">Type</th><th className="p-3">Item</th><th className="p-3">Status</th></tr></thead>
                   <tbody>
                       {agendaItems.map(item => (
                           <tr key={item.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => item.type === 'TICKET' && setSelectedTicket(item.ticket)}>
-                              <td className="p-3">{new Date(item.date).toLocaleDateString()}</td>
+                              <td className="p-3">{item.date ? new Date(item.date).toLocaleDateString() : 'N/A'}</td>
                               <td className="p-3 font-bold text-xs">{item.type}</td>
                               <td className="p-3 font-medium">{item.title}</td>
                               <td className="p-3">{getStatusBadge(item.status)}</td>
@@ -148,24 +186,25 @@ const TicketDashboard: React.FC<Props> = ({ user, refreshKey, onRefresh }) => {
                       <tr>
                           <th className="p-3 cursor-pointer" onClick={() => setSortField('Date')}>Date</th>
                           <th className="p-3">Title</th>
-                          <th className="p-3">Location</th>
+                          <th className="p-3">Submitted By</th>
                           <th className="p-3 cursor-pointer" onClick={() => setSortField('Status')}>Status</th>
                           <th className="p-3">Action</th>
                       </tr>
                   </thead>
                   <tbody>
                       {filteredTickets.map(t => (
-                          <tr key={t.TicketID} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedTicket(t)}>
-                              <td className="p-3">{new Date(t.Date_Submitted).toLocaleDateString()}</td>
+                          <tr key={t.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedTicket(t)}>
+                              <td className="p-3">{t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'N/A'}</td>
                               <td className="p-3 font-medium">
-                                  <div>{t.Title}</div>
-                                  <div className="text-xs text-gray-500">{t.Submitter_Email}</div>
+                                  <div>{t.title}</div>
+                                  {/* Using priority as secondary info */}
+                                  <div className="text-xs text-gray-500">{t.priority}</div>
                               </td>
-                              <td className="p-3">{lookup.location(t.LocationID_Ref)}</td>
-                              <td className="p-3">{getStatusBadge(t.Status)}</td>
+                              <td className="p-3">{t.createdBy}</td>
+                              <td className="p-3">{getStatusBadge(t.status)}</td>
                               <td className="p-3">
-                                  {!t.Assigned_Staff && t.Status === 'New' && canClaim && (
-                                      <button onClick={(e) => handleQuickClaim(e, t.TicketID)} className="text-xs bg-green-600 text-white px-2 py-1 rounded">Claim</button>
+                                  {!t.assignedTo && t.status === 'New' && canClaim && (
+                                      <button onClick={(e) => handleQuickClaim(e, t.id)} className="text-xs bg-green-600 text-white px-2 py-1 rounded">Claim</button>
                                   )}
                               </td>
                           </tr>
@@ -177,7 +216,15 @@ const TicketDashboard: React.FC<Props> = ({ user, refreshKey, onRefresh }) => {
            )}
         </div>
       </div>
-      {selectedTicket && <TicketDetail ticket={selectedTicket} user={user} onClose={() => setSelectedTicket(null)} onUpdate={onRefresh} />}
+      
+      {selectedTicket && (
+        <TicketDetail 
+          ticket={selectedTicket} 
+          currentUser={user} // TicketDetail expects 'currentUser' prop name based on previous fixes
+          onBack={() => setSelectedTicket(null)} 
+          onUpdate={onRefresh} 
+        />
+      )}
     </>
   );
 };
