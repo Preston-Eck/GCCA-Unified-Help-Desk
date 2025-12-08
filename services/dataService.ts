@@ -1,310 +1,404 @@
 import { Ticket, SOP, MaintenanceSchedule, InventoryItem, User, Asset, Campus, Building, Location, SiteConfig, RoleDefinition, KBArticle, AccountRequest, Vendor, Material } from '../types';
+import * as API from './api';
 
 // ==========================================
-// 1. MOCK DATABASE
+// 1. LOCAL CACHE & NORMALIZATION
 // ==========================================
-const MOCK_DATA: Record<string, any[]> = {
-  'Tickets': [],
-  'SOPs': [],
-  'Maintenance': [],
-  'Inventory': [],
-  'Campuses': [{ id: 'c1', name: 'Main Campus', code: 'MAIN' }],
-  'Buildings': [{ id: 'b1', campusId: 'c1', name: 'Science Hall' }],
-  'Locations': [{ id: 'l1', buildingId: 'b1', name: 'Room 101', type: 'Classroom' }],
-  'Assets': [{ id: 'a1', name: 'Projector', type: 'AV', locationId: 'l1', status: 'Active' }],
-  'Mappings': [], 
-  'Comments': [],
-  'Attachments': [],
-  'Roles': [
-    { id: 'r1', name: 'Admin', description: 'Full Access', permissions: ['all'], isSystem: true },
-    { id: 'r2', name: 'User', description: 'Standard Access', permissions: ['read'], isSystem: true }
-  ],
-  'KBArticles': [],
-  'Users': [
-     { id: 'u1', name: 'Demo User', email: 'demo@gcca.org', role: 'Admin', department: 'IT', status: 'Active' },
-     { id: 'u2', name: 'Preston Eck', email: 'preston@grovecitychristianacademy.com', role: 'Admin', department: 'IT', status: 'Active' }
-  ],
-  'AccountRequests': [],
-  'Vendors': []
+let CACHE: Record<string, any[]> = {
+  'Tickets': [], 'SOPs': [], 'Maintenance': [], 'Inventory': [],
+  'Campuses': [], 'Buildings': [], 'Locations': [], 'Assets': [],
+  'Mappings': [], 'Comments': [], 'Attachments': [],
+  'Roles': [], 'Users': [], 'AccountRequests': [], 'Vendors': []
 };
 
-// ==========================================
-// 2. GENERIC HELPERS (Synchronous Read, Async Write)
-// ==========================================
-
-// CHANGED: Removed async to prevent UI crashes
-export const getItems = (listName: string): any[] => {
-  return MOCK_DATA[listName] || [];
+let APP_CONFIG: SiteConfig = {
+  siteName: 'GCCA Unified Help Desk',
+  supportEmail: 'support@gcca.org',
+  primaryColor: '#355E3B'
 };
 
-export const addItem = async (listName: string, item: any): Promise<any> => {
-  await new Promise(resolve => setTimeout(resolve, 50));
-  const newItem = { ...item, id: Math.random().toString(36).substr(2, 9) };
-  if (!MOCK_DATA[listName]) MOCK_DATA[listName] = [];
-  MOCK_DATA[listName].push(newItem);
+// HELPERS: Normalize Backend Data (Sheet Columns) -> Frontend Types
+const normalize = (item: any, idField: string) => {
+  if (!item) return item;
+  const newItem = { ...item, id: item[idField] || item.id };
+  
+  // --- MAPPING FIXES (Backend -> Frontend) ---
+  
+  // Users
+  if (item.Email) newItem.email = item.Email;
+  if (item.Name) newItem.name = item.Name;
+  if (item.User_Type) newItem.role = item.User_Type;
+  if (item.Department) newItem.department = item.Department;
+  if (item.Account_Status) newItem.status = item.Account_Status;
+
+  // Tickets
+  if (item.Date_Submitted) newItem.createdAt = item.Date_Submitted;
+  if (item.Submitter_Email) newItem.createdBy = item.Submitter_Email;
+  if (item.Status) newItem.status = item.Status;
+  if (item.Is_Public) newItem.isPublic = item.Is_Public;
+  if (item.Title) newItem.title = item.Title;
+  if (item.Description) newItem.description = item.Description;
+  if (item.Priority) newItem.priority = item.Priority;
+  if (item.Assigned_Staff) newItem.assignedTo = item.Assigned_Staff;
+
+  // Assets / Locations
+  if (item.Asset_Name) newItem.name = item.Asset_Name;
+  if (item.Location_Name) newItem.name = item.Location_Name;
+  if (item.Building_Name) newItem.name = item.Building_Name;
+  if (item.Campus_Name) newItem.name = item.Campus_Name;
+
+  // Materials
+  if (item.Material_Name) newItem.name = item.Material_Name;
+  if (item.Quantity_on_Hand) newItem.quantity = item.Quantity_on_Hand;
+  if (item.Reorder_Point) newItem.minLevel = item.Reorder_Point;
+
   return newItem;
 };
 
-export const updateItem = async (listName: string, id: string, updates: any): Promise<void> => {
-  await new Promise(resolve => setTimeout(resolve, 50));
-  const list = MOCK_DATA[listName] || [];
-  const index = list.findIndex(i => i.id === id);
-  if (index !== -1) list[index] = { ...list[index], ...updates };
+// HELPERS: Prepare Frontend Data -> Backend Columns
+const toBackend = (item: any, idField: string) => {
+  const { id, ...rest } = item;
+  const backendItem = { ...rest, [idField]: id || item[idField] };
+  
+  // Mapping back to Backend Columns if needed
+  if (item.createdAt) backendItem.Date_Submitted = item.createdAt;
+  if (item.createdBy) backendItem.Submitter_Email = item.createdBy;
+  if (item.status) backendItem.Status = item.status;
+  if (item.email) backendItem.Email = item.email;
+  if (item.name) backendItem.Name = item.name;
+  if (item.role) backendItem.User_Type = item.role;
+  
+  return backendItem;
 };
 
-export const deleteItem = async (listName: string, id: string): Promise<void> => {
-  await new Promise(resolve => setTimeout(resolve, 50));
-  if (MOCK_DATA[listName]) {
-    MOCK_DATA[listName] = MOCK_DATA[listName].filter(i => i.id !== id);
+// ==========================================
+// 2. INIT & SYNC
+// ==========================================
+export const initDatabase = async () => {
+  try {
+    const data = await API.getDatabaseData();
+    if (!data) {
+      console.warn("No data returned from backend (Mock Mode?)");
+      return;
+    }
+
+    // Load and Normalize Data
+    CACHE['Tickets'] = (data.TICKETS || []).map((t: any) => normalize(t, 'TicketID'));
+    CACHE['SOPs'] = (data.SOPS || []).map((s: any) => normalize(s, 'SOP_ID'));
+    CACHE['Maintenance'] = (data.SCHEDULES || []).map((s: any) => normalize(s, 'PM_ID'));
+    CACHE['Inventory'] = (data.MATERIALS || []).map((m: any) => normalize(m, 'MaterialID'));
+    CACHE['Campuses'] = (data.CAMPUSES || []).map((c: any) => normalize(c, 'CampusID'));
+    CACHE['Buildings'] = (data.BUILDINGS || []).map((b: any) => normalize(b, 'BuildingID'));
+    CACHE['Locations'] = (data.LOCATIONS || []).map((l: any) => normalize(l, 'LocationID'));
+    CACHE['Assets'] = (data.ASSETS || []).map((a: any) => normalize(a, 'AssetID'));
+    CACHE['Users'] = (data.USERS || []).map((u: any) => normalize(u, 'UserID'));
+    CACHE['Roles'] = (data.ROLES || []).map((r: any) => normalize(r, 'RoleName')); 
+    CACHE['Vendors'] = (data.VENDORS || []).map((v: any) => normalize(v, 'VendorID'));
+    CACHE['Mappings'] = (data.MAPPINGS || []).map((m: any) => normalize(m, 'MappingID'));
+    CACHE['AccountRequests'] = (data.REQUESTS || []).map((r: any) => normalize(r, 'RequestID'));
+    
+    if (data.CONFIG && data.CONFIG.length > 0) {
+       APP_CONFIG = { ...APP_CONFIG, ...data.CONFIG[0] };
+    }
+
+    console.log("Database initialized & normalized:", CACHE);
+  } catch (error) {
+    console.error("Failed to sync with Google Sheets:", error);
   }
 };
 
 // ==========================================
-// 3. SPECIFIC EXPORTS
+// 3. GENERIC HELPERS (Sync Read, Async Write)
+// ==========================================
+export const getItems = (listName: string): any[] => {
+  return CACHE[listName] || [];
+};
+
+const updateCache = (listName: string, item: any, isDelete = false) => {
+  const list = CACHE[listName] || [];
+  if (isDelete) {
+    CACHE[listName] = list.filter(i => i.id !== item.id);
+  } else {
+    const index = list.findIndex(i => i.id === item.id);
+    if (index >= 0) {
+      CACHE[listName][index] = { ...CACHE[listName][index], ...item };
+    } else {
+      CACHE[listName].push(item);
+    }
+  }
+};
+
+// ==========================================
+// 4. SPECIFIC EXPORTS
 // ==========================================
 
 // --- Users & Permissions ---
 export const getCurrentUser = async (): Promise<User> => {
-  return { id: '123', name: 'Demo User', email: 'demo@gcca.org', role: 'Admin', department: 'IT' };
+  // In real mode, App.tsx handles user resolution
+  return CACHE['Users'][0] || {} as User;
 };
-
-export const getTechnicians = async () => [
-  { id: 't1', name: 'Mike Tech', email: 'mike@gcca.org' },
-  { id: 't2', name: 'Sarah Tech', email: 'sarah@gcca.org' }
-];
-
-export const hasPermission = (user: any, permission: string) => true;
-
-// Helper must remain object but return sync data
-export const lookup = {
-  campus: (q: string) => getItems('Campuses'),
-  building: (q: string) => getItems('Buildings'),
-  location: (q: string) => getItems('Locations'),
-  asset: (q: string) => getItems('Assets'),
-  user: (q: string) => [{ id: 'u1', name: 'User 1' }]
-};
-
-// --- Tickets ---
-export const submitTicket = async (arg1: string | any, arg2?: any): Promise<any> => {
-  if (typeof arg1 === 'string') return addItem(arg1, arg2);
-  return addItem('Tickets', arg1);
-};
-
-export const getTickets = () => getItems('Tickets');
-
-export const getTicketsForUser = (userId: string) => getItems('Tickets');
-
-export const getTicketById = (id: string) => {
-    const tickets = getItems('Tickets');
-    return tickets.find(t => t.id === id);
-};
-
-export const updateTicket = (id: string, data: any, user?: any, comment?: string) => {
-  return updateItem('Tickets', id, data);
-};
-export const deleteTicket = (id: string) => deleteItem('Tickets', id);
-
-export const updateTicketStatus = (id: string, status: string) => updateItem('Tickets', id, { status });
-export const addTicketComment = (ticketId: string, comment: string) => addItem('Comments', { ticketId, comment, date: new Date() });
-export const toggleTicketPublic = (id: string, isPublic: boolean) => updateItem('Tickets', id, { isPublic });
-export const getAttachments = async (ticketId: string) => [];
-export const claimTicket = (id: string) => updateItem('Tickets', id, { assignedTo: 'Current User' });
-export const getBidsForTicket = async (ticketId: string) => [];
-export const acceptBid = async (ticketId: string, bidId: string) => updateItem('Tickets', ticketId, { status: 'Bid Accepted' });
-
-// --- SOPs ---
-export const getAllSOPs = () => getItems('SOPs');
-export const saveSOP = (sop: any) => sop.id ? updateItem('SOPs', sop.id, sop) : addItem('SOPs', sop);
-export const deleteSOP = (id: string) => deleteItem('SOPs', id);
-export const updateSOP = (id: string, data: any) => updateItem('SOPs', id, data);
-export const getSOPsForAsset = (assetId: string) => [];
-export const linkSOPToAsset = async (sopId: string, assetId: string) => {};
-export const addSOP = (data: any) => addItem('SOPs', data);
-
-// --- Maintenance ---
-export const getAllMaintenanceSchedules = () => getItems('Maintenance');
-export const getMaintenanceSchedules = () => getItems('Maintenance');
-export const saveMaintenanceSchedule = (schedule: any) => schedule.id ? updateItem('Maintenance', schedule.id, schedule) : addItem('Maintenance', schedule);
-export const deleteMaintenanceSchedule = (id: string) => deleteItem('Maintenance', id);
-export const checkAndGeneratePMTickets = async () => {};
-
-// --- Inventory ---
-export const getAllInventory = () => getItems('Inventory');
-export const addInventoryItem = (item: any) => addItem('Inventory', item);
-export const updateInventoryQuantity = (id: string, qty: number) => updateItem('Inventory', id, { quantity: qty });
-export const updateInventoryItem = (id: string, data: any) => updateItem('Inventory', id, data);
-export const deleteInventoryItem = (id: string) => deleteItem('Inventory', id);
-
-// Alias for InventoryManager
-export const getInventory = () => getItems('Inventory');
-export const saveMaterial = (mat: any) => mat.id ? updateItem('Inventory', mat.id, mat) : addItem('Inventory', mat);
-
-// --- Asset Manager Specifics ---
-export const getCampuses = (query?: any) => getItems('Campuses');
-
-export const saveCampus = (campus: any) => {
-    return campus.id ? updateItem('Campuses', campus.id, campus) : addItem('Campuses', campus);
-};
-
-export const deleteCampus = (id: string) => deleteItem('Campuses', id);
-
-export const getBuildings = (campusId?: string) => getItems('Buildings');
-export const getLocations = (buildingId?: string) => getItems('Locations');
-export const getAssets = (locationId?: string) => getItems('Assets');
-
-export const addBuilding = (arg1: any, arg2?: any) => {
-  const data = arg2 ? arg2 : arg1; 
-  return addItem('Buildings', data);
-};
-export const addLocation = (arg1: any, arg2?: any) => {
-  const data = arg2 ? arg2 : arg1;
-  return addItem('Locations', data);
-};
-export const addAsset = (arg1: any, arg2?: any) => {
-  const data = arg2 ? arg2 : arg1;
-  return addItem('Assets', data);
-};
-
-export const updateBuilding = (id: string, data: any) => updateItem('Buildings', id, data);
-export const updateLocation = (id: string, data: any) => updateItem('Locations', id, data);
-export const updateAsset = (id: string, data: any) => updateItem('Assets', id, data);
-
-export const deleteBuilding = (id: string) => deleteItem('Buildings', id);
-export const deleteLocation = (id: string) => deleteItem('Locations', id);
-export const deleteAsset = (id: string) => deleteItem('Assets', id);
-
-export const getAssetDetails = async (id: string) => {
-  const assets = await getItems('Assets');
-  return assets.find(a => a.id === id);
-};
-
-// --- Files ---
-export const uploadFile = async (file: File) => {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return {
-    id: Math.random().toString(36).substr(2, 9),
-    name: file.name,
-    url: URL.createObjectURL(file),
-    type: file.type
-  };
-};
-
-// --- Schema Mapping ---
-
-export const APP_FIELDS = [
-  { key: 'title', label: 'Title', type: 'text', required: true },
-  { key: 'description', label: 'Description', type: 'text', required: true },
-  { key: 'status', label: 'Status', type: 'select', options: ['Open', 'Closed'] },
-  { key: 'priority', label: 'Priority', type: 'select', options: ['Low', 'Medium', 'High'] },
-  { key: 'assignedTo', label: 'Assigned To', type: 'user' },
-  { key: 'dueDate', label: 'Due Date', type: 'date' }
-];
-
-export const fetchSchema = async (sheetId: string) => {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return [
-    { id: 'col1', name: 'Ticket Name', type: 'text' },
-    { id: 'col2', name: 'Details', type: 'text' },
-    { id: 'col3', name: 'Severity', type: 'text' },
-    { id: 'col4', name: 'Date Created', type: 'date' }
-  ];
-};
-
-export const getMappings = (sheetId: string) => getItems('Mappings');
-
-export const saveMapping = (mapping: any) => {
-  return mapping.id ? updateItem('Mappings', mapping.id, mapping) : addItem('Mappings', mapping);
-};
-
-export const deleteFieldMapping = (id: string) => deleteItem('Mappings', id);
-
-export const addColumnToSheet = async (sheetId: string, columnName: string) => {
-  await new Promise(resolve => setTimeout(resolve, 300));
-  return { id: Math.random().toString(), name: columnName };
-};
-
-// --- Admin Config ---
-
-let MOCK_CONFIG: SiteConfig = {
-    siteName: 'GCCA Unified Help Desk',
-    supportEmail: 'support@gcca.org',
-    primaryColor: '#2563eb'
-};
-
-export const getAppConfig = (): SiteConfig => {
-    return MOCK_CONFIG;
-};
-
-export const updateAppConfig = async (config: Partial<SiteConfig>): Promise<SiteConfig> => {
-    await new Promise(resolve => setTimeout(resolve, 200));
-    MOCK_CONFIG = { ...MOCK_CONFIG, ...config };
-    return MOCK_CONFIG;
-};
-
-// --- Auth ---
-
-export const requestOtp = async (email: string): Promise<{ success: boolean; message?: string }> => {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  console.log(`OTP requested for ${email}`);
-  return { success: true };
-};
-
-export const verifyOtp = async (email: string, otp: string): Promise<boolean> => {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return true; 
-};
-
-// --- Role Management ---
-
-export const getRoles = () => getItems('Roles');
-
-export const saveRole = (role: any) => {
-  return role.id ? updateItem('Roles', role.id, role) : addItem('Roles', role);
-};
-
-export const deleteRole = (id: string) => deleteItem('Roles', id);
-
-// --- Knowledge Base ---
-
-export const getKBArticles = () => getItems('KBArticles');
-
-export const saveKBArticle = (article: any) => {
-  return article.id ? updateItem('KBArticles', article.id, article) : addItem('KBArticles', article);
-};
-
-export const deleteKBArticle = (id: string) => deleteItem('KBArticles', id);
-
-// --- User Management & Account Requests ---
 
 export const getUsers = () => getItems('Users');
 
-export const saveUser = (user: any) => {
-  return user.id ? updateItem('Users', user.id, user) : addItem('Users', user);
+export const saveUser = async (user: any) => {
+  updateCache('Users', user);
+  return API.saveUser(toBackend(user, 'UserID'));
 };
 
-export const deleteUser = (id: string) => deleteItem('Users', id);
+export const deleteUser = async (id: string) => {
+  updateCache('Users', { id }, true);
+  return API.deleteUser(id);
+};
 
-export const getAccountRequests = () => getItems('AccountRequests');
+export const hasPermission = (user: any, permission: string) => {
+  if (user?.role?.includes('Admin')) return true;
+  return true; 
+};
 
-export const rejectAccountRequest = (id: string) => updateItem('AccountRequests', id, { status: 'Rejected' });
+export const getRoles = () => getItems('Roles');
+export const saveRole = async (role: any) => {
+  updateCache('Roles', role);
+  return API.saveRole(toBackend(role, 'RoleName'));
+};
+export const deleteRole = async (id: string) => {
+  updateCache('Roles', { id }, true);
+  return API.deleteRole(id);
+};
 
-export const approveAccountRequest = (id: string) => updateItem('AccountRequests', id, { status: 'Approved' });
+// --- Tickets ---
+export const getTickets = () => getItems('Tickets');
+export const getTicketsForUser = (userId: string) => getItems('Tickets'); 
 
-// --- Vendor Management ---
+export const getTicketById = (id: string) => {
+  const tickets = getItems('Tickets');
+  return tickets.find(t => t.id === id);
+};
+
+export const submitTicket = async (userEmail: string | any, data?: any) => {
+  const ticketData = typeof userEmail === 'object' ? userEmail : data;
+  const email = typeof userEmail === 'string' ? userEmail : 'unknown@gcca.org';
+
+  const newTicket = { 
+    ...ticketData, 
+    id: 'T-' + Date.now(), 
+    createdBy: email,
+    createdAt: new Date().toISOString(),
+    status: 'New'
+  };
+  updateCache('Tickets', newTicket);
+  return API.submitTicket(toBackend(newTicket, 'TicketID'));
+};
+
+export const updateTicket = async (id: string, data: any) => {
+  updateCache('Tickets', { ...data, id });
+  return API.saveTicket(toBackend({ ...data, id }, 'TicketID'));
+};
+
+export const updateTicketStatus = async (id: string, status: string) => {
+  updateCache('Tickets', { id, status }); 
+  return API.updateTicketStatus(id, status);
+};
+
+export const claimTicket = async (id: string) => {
+  return API.updateTicketStatus(id, 'Assigned');
+};
+
+// --- Assets ---
+export const getCampuses = () => getItems('Campuses');
+export const saveCampus = async (c: any) => { updateCache('Campuses', c); return API.saveCampus(toBackend(c, 'CampusID')); };
+export const deleteCampus = async (id: string) => { updateCache('Campuses', {id}, true); return API.deleteCampus(id); };
+
+export const getBuildings = (campusId?: string) => {
+  const all = getItems('Buildings');
+  return campusId ? all.filter(b => b.CampusID_Ref === campusId) : all;
+};
+export const saveBuilding = async (b: any) => { updateCache('Buildings', b); return API.saveBuilding(toBackend(b, 'BuildingID')); };
+export const deleteBuilding = async (id: string) => { updateCache('Buildings', {id}, true); return API.deleteBuilding(id); };
+
+// ALIAS: addBuilding (Used by AssetManager)
+export const addBuilding = async (data: any, name?: string) => {
+  const building = name ? { ...data, Building_Name: name, id: 'B-'+Date.now() } : { ...data, id: 'B-'+Date.now() };
+  updateCache('Buildings', building);
+  return API.saveBuilding(toBackend(building, 'BuildingID'));
+};
+
+export const updateBuilding = async (id: string, data: any) => {
+  const updated = { ...data, id };
+  updateCache('Buildings', updated);
+  return API.saveBuilding(toBackend(updated, 'BuildingID'));
+};
+
+export const getLocations = (buildingId?: string) => {
+  const all = getItems('Locations');
+  return buildingId ? all.filter(l => l.BuildingID_Ref === buildingId) : all;
+};
+export const addLocation = async (buildingId: any, name?: string) => {
+  const newItem = typeof buildingId === 'object' 
+    ? buildingId 
+    : { id: 'L-'+Date.now(), Location_Name: name, BuildingID_Ref: buildingId };
+    
+  updateCache('Locations', newItem);
+  return API.saveLocation(toBackend(newItem, 'LocationID'));
+};
+export const deleteLocation = async (id: string) => { updateCache('Locations', {id}, true); return API.deleteLocation(id); };
+
+export const getAssets = (locationId?: string) => {
+  const all = getItems('Assets');
+  return locationId ? all.filter(a => a.LocationID_Ref === locationId) : all;
+};
+export const addAsset = async (locationId: any, name?: string) => {
+  const newItem = typeof locationId === 'object'
+    ? locationId
+    : { id: 'A-'+Date.now(), Asset_Name: name, LocationID_Ref: locationId, status: 'Active' };
+
+  updateCache('Assets', newItem);
+  return API.saveAsset(toBackend(newItem, 'AssetID'));
+};
+export const deleteAsset = async (id: string) => { updateCache('Assets', {id}, true); return API.deleteAsset(id); };
+
+export const updateLocation = (id: string, data: any) => {
+  const item = { ...data, id };
+  updateCache('Locations', item);
+  return API.saveLocation(toBackend(item, 'LocationID'));
+};
+export const updateAsset = (id: string, data: any) => {
+  const item = { ...data, id };
+  updateCache('Assets', item);
+  return API.saveAsset(toBackend(item, 'AssetID'));
+};
+
+
+// --- Inventory & Vendors ---
+export const getInventory = () => getItems('Inventory');
+export const saveMaterial = async (m: any) => { 
+  updateCache('Inventory', m); 
+  return API.saveMaterial(toBackend(m, 'MaterialID')); 
+};
 
 export const getVendors = () => getItems('Vendors');
+export const saveVendor = async (v: any) => { 
+  updateCache('Vendors', v); 
+  return API.saveVendor(toBackend(v, 'VendorID')); 
+};
+export const updateVendorStatus = async (id: string, status: string) => {
+  const vendor = CACHE['Vendors'].find(v => v.id === id);
+  if (vendor) {
+     vendor.Status = status;
+     updateCache('Vendors', vendor);
+     return API.saveVendor(toBackend(vendor, 'VendorID'));
+  }
+};
+export const getVendorHistory = (id: string) => []; 
 
-export const saveVendor = (vendor: any) => {
-  return vendor.id ? updateItem('Vendors', vendor.id, vendor) : addItem('Vendors', vendor);
+// --- Config & Utils ---
+export const getAppConfig = () => APP_CONFIG;
+export const updateAppConfig = async (cfg: Partial<SiteConfig>) => {
+  APP_CONFIG = { ...APP_CONFIG, ...cfg };
+  return API.updateConfig(APP_CONFIG);
 };
 
-export const updateVendorStatus = (id: string, status: string) => updateItem('Vendors', id, { status });
-
-export const getVendorHistory = (id: string) => [];
-
-// --- Init Database ---
-
-export const initDatabase = async () => {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    console.log('Database initialized with mock data');
+export const lookup = {
+  campus: (id: string) => CACHE['Campuses'].find(c => c.id === id)?.Campus_Name || id,
+  building: (id: string) => CACHE['Buildings'].find(b => b.id === id)?.Building_Name || id,
+  location: (id: string) => CACHE['Locations'].find(l => l.id === id)?.Location_Name || id,
+  asset: (id: string) => CACHE['Assets'].find(a => a.id === id)?.Asset_Name || id,
+  user: (email: string) => CACHE['Users'].find(u => u.email === email)?.name || email
 };
+
+// --- Auth ---
+export const requestOtp = async (email: string) => API.requestOtp(email);
+export const verifyOtp = async (email: string, code: string) => {
+  const result = await API.verifyOtp(email, code);
+  return !!result;
+};
+
+// --- Operations & Maintenance ---
+export const getAllMaintenanceSchedules = () => getItems('Maintenance');
+export const getMaintenanceSchedules = () => getItems('Maintenance');
+export const saveMaintenanceSchedule = async (data: any) => {
+  updateCache('Maintenance', data);
+  return API.saveSchedule(toBackend(data, 'PM_ID'));
+};
+export const deleteMaintenanceSchedule = async (id: string) => {}; 
+export const checkAndGeneratePMTickets = async () => {};
+
+export const getAccountRequests = () => getItems('AccountRequests');
+export const rejectAccountRequest = async (id: string) => {}; 
+export const approveAccountRequest = async (id: string) => {}; 
+export const getSOPsForAsset = (id: string) => [];
+
+export const getAllSOPs = () => getItems('SOPs');
+export const addSOP = async (data: any) => {
+  updateCache('SOPs', data);
+  return API.saveSOP(toBackend(data, 'SOP_ID'));
+};
+export const updateSOP = async (id: string, data: any) => {
+  const item = { ...data, id };
+  updateCache('SOPs', item);
+  return API.saveSOP(toBackend(item, 'SOP_ID'));
+};
+export const deleteSOP = async (id: string) => {};
+
+// Generic Wrappers
+export const addItem = async (list: string, data: any) => {
+  if (list === 'SOPs') return addSOP(data);
+  if (list === 'Maintenance') return saveMaintenanceSchedule(data);
+  return data;
+};
+export const updateItem = async (list: string, id: string, data: any) => {
+  return addItem(list, { ...data, id });
+};
+export const deleteItem = async (list: string, id: string) => {};
+
+export const getAllInventory = () => getItems('Inventory');
+export const addInventoryItem = async (data: any) => saveMaterial(data);
+export const updateInventoryQuantity = async (id: string, q: number) => {};
+export const updateInventoryItem = async (id: string, data: any) => saveMaterial({ ...data, id });
+export const deleteInventoryItem = async (id: string) => {};
+
+export const getAssetDetails = async (id: string) => getItems('Assets').find(a => a.id === id);
+
+// --- Mapping & Files ---
+export const APP_FIELDS = [
+  { id: 'ticket.id', label: 'Ticket ID', description: 'Unique identifier' },
+  { id: 'ticket.title', label: 'Title', description: 'Issue summary' },
+  { id: 'ticket.description', label: 'Description', description: 'Full details' },
+  { id: 'ticket.status', label: 'Status', description: 'Open, Closed, etc.' },
+  { id: 'ticket.priority', label: 'Priority', description: 'Low, Medium, High' },
+  { id: 'ticket.category', label: 'Category', description: 'IT or Facilities' },
+  { id: 'ticket.submitter', label: 'Submitter Email', description: 'Email of requester' },
+  { id: 'ticket.assigned', label: 'Assigned To', description: 'Tech email' },
+  { id: 'location.id', label: 'Location ID', description: 'Room/Area ID' },
+  { id: 'asset.id', label: 'Asset ID', description: 'Equipment ID' },
+  { id: 'user.name', label: 'User Name', description: 'Full name' },
+  { id: 'user.email', label: 'User Email', description: 'Login email' }
+];
+
+export const fetchSchema = async () => API.getSchema(); 
+export const getMappings = () => getItems('Mappings');
+
+export const saveMapping = async (mapping: any) => {
+  if (!mapping.MappingID && !mapping.id) {
+     mapping.MappingID = 'MAP-' + Date.now();
+  }
+  updateCache('Mappings', mapping);
+  return API.saveMapping(toBackend(mapping, 'MappingID'));
+};
+
+export const deleteFieldMapping = async (id: string) => API.deleteMapping(id);
+export const addColumnToSheet = async (s: string, h: string) => API.addColumnToSheet(s, h);
+
+export const uploadFile = async (file: File, ticketId: string) => {
+  return API.uploadFile(file, ticketId);
+};
+
+export const saveKBArticle = async (d: any) => {};
+export const deleteKBArticle = async (id: string) => {};
+export const getKBArticles = () => [];
+
+export const addTicketComment = async (id: string, txt: string) => API.saveComment({ TicketID_Ref: id, Comment: txt });
+export const toggleTicketPublic = async (id: string, pub: boolean) => {};
+export const getAttachments = async (id: string) => [];
+export const getBidsForTicket = async (id: string) => [];
+export const acceptBid = async (tid: string, bid: string) => {};
+export const linkSOPToAsset = async (aid: string, sid: string) => API.linkSOP(aid, sid);
