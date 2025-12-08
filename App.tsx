@@ -33,11 +33,13 @@ export default function App() {
     const init = async () => {
       try {
         await initDatabase();
-        const users = getUsers();
+        
+        // FIXED: Added await for async data
+        const users = await getUsers();
         setAllUsers(users);
         
-        const config = getAppConfig();
-        if (config && config.appName) setAppName(config.appName);
+        const config = await getAppConfig();
+        if (config && config.siteName) setAppName(config.siteName);
 
         let email = await getSessionUserEmail();
         if (!email || email === '') {
@@ -48,19 +50,22 @@ export default function App() {
         if (email && email !== '') {
            setRealUserEmail(email);
            const normEmail = email.trim().toLowerCase();
-           const foundUser = users.find((u: User) => u.Email.toLowerCase() === normEmail);
+           
+           // FIXED: Used lowercase 'email' to match User type
+           const foundUser = users.find((u: User) => u.email.toLowerCase() === normEmail);
            
            if (foundUser) {
              setCurrentUser(foundUser);
            } else if (normEmail === SUPER_ADMIN_EMAIL.toLowerCase()) {
              console.warn("Using Super Admin Override");
+             // FIXED: User object uses lowercase keys to match 'User' interface
              setCurrentUser({
-               UserID: 'ADMIN_OVERRIDE',
-               Email: email,
-               Name: 'Super Admin (Recovery)',
-               User_Type: 'Super Admin, Chair, Admin',
-               Department: 'IT',
-               Account_Status: 'Active'
+               id: 'ADMIN_OVERRIDE',
+               email: email,
+               name: 'Super Admin (Recovery)',
+               role: 'Admin', // Maps to User_Type logic later if needed
+               department: 'IT',
+               status: 'Active'
              });
            }
         }
@@ -77,17 +82,19 @@ export default function App() {
     if (email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
       localStorage.setItem(STORAGE_KEY, email);
       setRealUserEmail(email);
+      // FIXED: User object uses lowercase keys
       setCurrentUser({
-         UserID: 'ADMIN_OVERRIDE',
-         Email: email,
-         Name: 'Super Admin (Recovery)',
-         User_Type: 'Super Admin, Chair, Admin',
-         Department: 'IT',
-         Account_Status: 'Active'
+         id: 'ADMIN_OVERRIDE',
+         email: email,
+         name: 'Super Admin (Recovery)',
+         role: 'Admin',
+         department: 'IT',
+         status: 'Active'
       });
       return;
     }
-    const user = allUsers.find(u => u.Email.toLowerCase() === email.toLowerCase());
+    // FIXED: Used lowercase 'email'
+    const user = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (user) {
       localStorage.setItem(STORAGE_KEY, email);
       setRealUserEmail(email);
@@ -108,20 +115,23 @@ export default function App() {
   const handleRoleSwitch = (targetEmail: string) => {
     if (targetEmail === 'REAL_USER') {
        if (realUserEmail.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+         // FIXED: User object uses lowercase keys
          setCurrentUser({
-            UserID: 'ADMIN_OVERRIDE',
-            Email: realUserEmail,
-            Name: 'Super Admin (Recovery)',
-            User_Type: 'Super Admin',
-            Department: 'IT',
-            Account_Status: 'Active'
+            id: 'ADMIN_OVERRIDE',
+            email: realUserEmail,
+            name: 'Super Admin (Recovery)',
+            role: 'Admin',
+            department: 'IT',
+            status: 'Active'
          });
        } else {
-         const me = allUsers.find(u => u.Email.toLowerCase() === realUserEmail.toLowerCase());
+         // FIXED: Used lowercase 'email'
+         const me = allUsers.find(u => u.email.toLowerCase() === realUserEmail.toLowerCase());
          if (me) setCurrentUser(me);
        }
     } else {
-       const targetUser = allUsers.find(u => u.Email === targetEmail);
+       // FIXED: Used lowercase 'email'
+       const targetUser = allUsers.find(u => u.email === targetEmail);
        if (targetUser) setCurrentUser(targetUser);
     }
   };
@@ -158,14 +168,16 @@ export default function App() {
                 <Users className="w-4 h-4 text-yellow-200" />
                 <select 
                   className="bg-transparent text-xs text-white font-mono focus:outline-none max-w-[120px] sm:max-w-none"
-                  value={currentUser.Email}
+                  // FIXED: Used lowercase 'email'
+                  value={currentUser.email}
                   onChange={(e) => handleRoleSwitch(e.target.value)}
                 >
                   <option className="text-black" value="REAL_USER">Viewing as: Myself</option>
                   <optgroup className="text-black" label="Switch View">
                     {allUsers.map(u => (
-                      <option key={u.UserID} value={u.Email}>
-                        {u.Name} ({u.User_Type})
+                      // FIXED: Used lowercase 'id', 'email', 'name', 'role'
+                      <option key={u.id} value={u.email}>
+                        {u.name} ({u.role})
                       </option>
                     ))}
                   </optgroup>
@@ -175,8 +187,9 @@ export default function App() {
             
             <div className="text-right flex items-center gap-3">
               <div className="hidden sm:block">
-                <div className="text-sm font-semibold">{currentUser.Name}</div>
-                <div className="text-xs text-gray-300 opacity-80">{currentUser.User_Type}</div>
+                {/* FIXED: Used lowercase 'name' and 'role' */}
+                <div className="text-sm font-semibold">{currentUser.name}</div>
+                <div className="text-xs text-gray-300 opacity-80">{currentUser.role}</div>
               </div>
               <button onClick={handleLogout} className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors text-white" title="Sign Out">
                 <LogOut className="w-4 h-4" />
@@ -248,11 +261,12 @@ export default function App() {
 
         <div className="animate-in fade-in duration-300">
           {view === 'dashboard' && <TicketDashboard user={currentUser} refreshKey={refreshKey} onRefresh={() => setRefreshKey(k => k + 1)} />}
-          {view === 'form' && <TicketForm userEmail={currentUser.Email} onSuccess={() => setView('dashboard')} />}
+          {/* FIXED: Used lowercase 'email' */}
+          {view === 'form' && <TicketForm userEmail={currentUser.email} onSuccess={() => setView('dashboard')} />}
           {view === 'assets' && <AssetManager user={currentUser} />}
           {view === 'campuses' && <CampusManager user={currentUser} />}
           {view === 'inventory' && <InventoryManager />}
-          {view === 'operations' && <OperationsDashboard user={currentUser} />}
+          {view === 'operations' && <OperationsDashboard currentUser={currentUser} />}
           {view === 'users' && <UserManager currentUser={currentUser} />}
           {view === 'vendors' && <VendorManager />} 
           {view === 'roles' && <RoleManager />}
