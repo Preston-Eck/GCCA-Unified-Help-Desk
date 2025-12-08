@@ -176,7 +176,11 @@ function saveSOP(d) { return saveData('SOPS', 'SOP_ID', d); }
 function saveSchedule(d) { return saveData('SCHEDULES', 'PM_ID', d); }
 function saveMapping(d) { return saveData('MAPPINGS', 'MappingID', d); }
 function deleteMapping(id) { return deleteData('MAPPINGS', 'MappingID', id); }
-function updateConfig(d) { return saveData('CONFIG', 'appName', d); }
+// FORCE a stable ID 'MASTER' so we always update the same row
+function updateConfig(d) { 
+  d.ConfigID = 'MASTER'; 
+  return saveData('CONFIG', 'ConfigID', d); 
+}
 function saveRole(d) { return saveData('ROLES', 'RoleName', d); }
 function deleteRole(id) { return deleteData('ROLES', 'RoleName', id); }
 function saveComment(d) { return saveData('COMMENTS', 'CommentID', d); }
@@ -254,32 +258,130 @@ function callGemini(prompt) {
     return JSON.parse(UrlFetchApp.fetch(url, options).getContentText()).candidates[0].content.parts[0].text;
   } catch (e) { return "AI Unavailable"; }
 }
-function updateSchema() { return "Schema Sync Complete"; }
-function emailDatabaseExport() {
+/**
+ * MASTER CLEANUP FUNCTION
+ * Runs schema sanitization and orphan data removal in one go.
+ */
+function runDataCleanup() {
+  const schemaLog = updateSchema();
+  const orphanLog = cleanOrphanData();
+  const finalLog = `--- DATA CLEANUP REPORT ---\n\n${schemaLog}\n\n${orphanLog}`;
+  
+  Logger.log(finalLog);
+  return finalLog;
+}
+
+/**
+ * 1. SCHEMA SANITIZER
+ * Iterates through all 30+ tabs defined in TABS.
+ * Ensures headers have no spaces (replaces with '_') and removes special chars like '?'.
+ */
+function updateSchema() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheets = ss.getSheets();
-  const blobs = [];
-  sheets.forEach(sheet => {
-    const name = sheet.getName();
+  let log = "Schema Update Log:\n";
+
+  // Iterate through every table defined in your global TABS object
+  Object.keys(TABS).forEach(key => {
+    const sheetName = TABS[key];
+    const sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      log += `[WARN] Sheet '${sheetName}' not found.\n`;
+      return;
+    }
+
+    // Get current headers
+    const lastCol = sheet.getLastColumn();
+    if (lastCol === 0) return; // Empty sheet
+
+    const headerRange = sheet.getRange(1, 1, 1, lastCol);
+    const headers = headerRange.getValues()[0];
+    let hasChanges = false;
+
+    // Process headers
+    const newHeaders = headers.map(h => {
+      let clean = String(h).trim();
+      
+      // 1. Replace spaces with underscores
+      clean = clean.replace(/\s+/g, '_');
+      
+      // 2. Remove illegal characters (like '?' in "Location_Listed?")
+      // Keeping only letters, numbers, and underscores
+      clean = clean.replace(/[^a-zA-Z0-9_]/g, '');
+
+      if (clean !== String(h)) {
+        hasChanges = true;
+      }
+      return clean;
+    });
+
+    // Write back if changes detected
+    if (hasChanges) {
+      headerRange.setValues([newHeaders]);
+      log += `[FIXED] Updated headers in '${sheetName}'.\n`;
+    } else {
+      log += `[OK] '${sheetName}' headers are clean.\n`;
+    }
+  });
+
+  return log;
+}
+
+/**
+ * 2. ORPHAN DATA SANITIZER
+ * Specifically looks for rows in Tickets and Assets that lack a primary ID.
+ * Based on your CSV analysis:
+ * - Tickets: Row 3 missing 'TicketID'
+ * - Assets: Last row missing 'AssetID'
+ */
+function cleanOrphanData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let log = "Orphan Data Cleanup Log:\n";
+
+  // Configuration for tables that need strict ID checks
+  const targets = [
+    { key: 'TICKETS', idCol: 'TicketID' },
+    { key: 'ASSETS', idCol: 'AssetID' }
+  ];
+
+  targets.forEach(target => {
+    const sheetName = TABS[target.key];
+    const sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) return;
+
     const data = sheet.getDataRange().getValues();
-    const csvString = data.map(row => 
-      row.map(cell => {
-        let cellStr = String(cell).replace(/"/g, '""'); 
-        if (cellStr.search(/("|,|\n)/g) >= 0) cellStr = `"${cellStr}"`;
-        return cellStr;
-      }).join(",")
-    ).join("\n");
-    blobs.push(Utilities.newBlob(csvString, 'text/csv', `${name}.csv`));
+    if (data.length < 2) return; // Only headers
+
+    const headers = data[0];
+    // Find the column index for the ID (e.g., TicketID)
+    // We strictly search for the clean name, assuming updateSchema() ran first
+    const idIndex = headers.findIndex(h => h.trim() === target.idCol);
+
+    if (idIndex === -1) {
+      log += `[ERROR] Could not find ID column '${target.idCol}' in ${sheetName}.\n`;
+      return;
+    }
+
+    // Iterate BACKWARDS to delete rows without messing up indices
+    let deletedCount = 0;
+    for (let i = data.length - 1; i >= 1; i--) {
+      const rowId = data[i][idIndex];
+      
+      // Check if ID is empty, null, or undefined
+      if (!rowId || String(rowId).trim() === '') {
+        sheet.deleteRow(i + 1); // +1 because sheet rows are 1-indexed
+        deletedCount++;
+        log += `[DELETED] Removed orphan row ${i + 1} in '${sheetName}' (Missing ${target.idCol}).\n`;
+      }
+    }
+
+    if (deletedCount === 0) {
+      log += `[OK] No orphans found in '${sheetName}'.\n`;
+    }
   });
-  const zip = Utilities.zip(blobs, 'GCCA_Database_Export.zip');
-  const recipient = Session.getActiveUser().getEmail();
-  MailApp.sendEmail({
-    to: recipient,
-    subject: "GCCA Database CSV Export",
-    body: "Attached is the full export of your spreadsheet tables.",
-    attachments: [zip]
-  });
-  return "Sent export to " + recipient;
+
+  return log;
 }
 /* =========================================
    6. DEBUG & EXPORT TOOLS
