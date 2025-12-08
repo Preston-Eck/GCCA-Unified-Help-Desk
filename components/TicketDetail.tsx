@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Ticket, User, TicketStatus, TicketAttachment, SOP, Asset, VendorBid, VendorReview, Priority } from '../types';
 import { updateTicketStatus, addTicketComment, toggleTicketPublic, lookup, getAttachments, getSOPsForAsset, getAssetDetails, getTechnicians, getBidsForTicket, acceptBid, claimTicket } from '../services/dataService';
-import { X, User as UserIcon, Calendar, MessageSquare, Send, Globe, Lock, Paperclip, FileText, Settings, AlertCircle, ShoppingBag, Check, Hand, Truck, Star, GitMerge } from 'lucide-react';
-import TaskManager from './TaskManager'; // <--- NEW INTEGRATION
+import { X, User as UserIcon, Calendar, MessageSquare, Send, Globe, Lock, Paperclip, FileText, Settings, ShoppingBag, Hand, Truck, GitMerge } from 'lucide-react';
+import TaskManager from './TaskManager'; 
 
 interface Props {
   ticket: Ticket;
@@ -18,12 +18,8 @@ const TicketDetail: React.FC<Props> = ({ ticket, user, onClose, onUpdate }) => {
   const [asset, setAsset] = useState<Asset | undefined>(undefined);
   const [techs, setTechs] = useState<User[]>([]);
   const [bids, setBids] = useState<VendorBid[]>([]);
-  const [review, setReview] = useState<VendorReview | undefined>(undefined);
-  const [rating, setRating] = useState(5);
-  const [reviewText, setReviewText] = useState('');
-  const [showRate, setShowRate] = useState(false);
-  const [mergeTarget, setMergeTarget] = useState('');
   const [showMerge, setShowMerge] = useState(false);
+  const [mergeTarget, setMergeTarget] = useState('');
 
   // Safe Permissions Checks
   const userType = user?.User_Type || '';
@@ -40,8 +36,8 @@ const TicketDetail: React.FC<Props> = ({ ticket, user, onClose, onUpdate }) => {
   const canManage = isChair || isAdmin || isBoard;
 
   useEffect(() => {
-    if (!ticket) return; // Safety Check
-    setAttachments(getAttachments(ticket.TicketID) || []); // Default to []
+    if (!ticket) return; 
+    setAttachments(getAttachments(ticket.TicketID) || []);
     
     if (ticket.Related_AssetID_Ref) {
       setSops(getSOPsForAsset(ticket.Related_AssetID_Ref) || []);
@@ -51,7 +47,6 @@ const TicketDetail: React.FC<Props> = ({ ticket, user, onClose, onUpdate }) => {
     if (canAssign) setTechs(getTechnicians() || []);
     if (canViewBids) {
       setBids(getBidsForTicket(ticket.TicketID) || []);
-      // setReview(getVendorReview(ticket.TicketID)); // Uncomment if review logic is ready
     }
   }, [ticket, canAssign, canViewBids]);
 
@@ -189,17 +184,17 @@ const TicketDetail: React.FC<Props> = ({ ticket, user, onClose, onUpdate }) => {
                    </h3>
                    <div className="space-y-4">
                      {(ticket.Comments || []).map((c: any, idx: number) => (
-                       <div key={idx} className={`flex gap-3 ${c.IsStatusChange ? 'opacity-75' : ''}`}>
-                         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 border-white shadow-sm ${c.IsStatusChange ? 'bg-gray-200' : 'bg-[#355E3B] text-white'}`}>
-                           {c.IsStatusChange ? <Settings className="w-4 h-4 text-gray-500"/> : <UserIcon className="w-4 h-4"/>}
+                       <div key={idx} className={`flex gap-3`}>
+                         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 border-white shadow-sm bg-[#355E3B] text-white`}>
+                           <UserIcon className="w-4 h-4"/>
                          </div>
                          <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex-1">
                            <div className="flex justify-between items-start">
-                             <span className="text-xs font-bold text-gray-900">{c.Author || c.Author_Email}</span>
+                             <span className="text-xs font-bold text-gray-900">{c.Author_Email}</span>
                              <span className="text-[10px] text-gray-400">{c.Timestamp ? new Date(c.Timestamp).toLocaleString() : ''}</span>
                            </div>
-                           <div className={`text-sm mt-1 ${c.IsStatusChange ? 'text-gray-500 italic' : 'text-gray-800'}`}>
-                             {c.Text}
+                           <div className="text-sm mt-1 text-gray-800">
+                             {c.Comment_Text}
                            </div>
                          </div>
                        </div>
