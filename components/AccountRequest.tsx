@@ -1,113 +1,223 @@
-
 import React, { useState } from 'react';
-import { submitAccountRequest } from '../services/dataService';
-import { UserPlus, ArrowLeft, Send } from 'lucide-react';
+import { submitTicket } from '../services/dataService';
+import { UserPlus, ArrowLeft, Send, AlertCircle } from 'lucide-react';
 
-interface Props {
+interface AccountRequestProps {
   onBack: () => void;
+  onSuccess: () => void;
 }
 
-const AccountRequest: React.FC<Props> = ({ onBack }) => {
+const AccountRequest: React.FC<AccountRequestProps> = ({ onBack, onSuccess }) => {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    role: 'Parent',
+    firstName: '',
+    lastName: '',
     department: '',
-    reason: ''
+    role: '',
+    supervisor: '',
+    mirrorUser: '',
+    systems: [] as string[],
+    notes: ''
   });
-  const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    submitAccountRequest({
-      Name: formData.name,
-      Email: formData.email,
-      RequestedRole: formData.role,
-      Department: formData.department,
-      Reason: formData.reason
-    });
-    setSubmitted(true);
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const formattedDescription = `
+New Account Request Details:
+----------------------------
+Name: ${formData.firstName} ${formData.lastName}
+Department: ${formData.department}
+Role: ${formData.role}
+Supervisor: ${formData.supervisor}
+Mirror User (Copy Permissions): ${formData.mirrorUser || 'N/A'}
+
+Additional Notes:
+${formData.notes || 'None'}
+      `.trim();
+
+      // FIXED: Added 'Tickets' as the first argument (List Name)
+      // The second argument is the data object.
+      await submitTicket('Tickets', {
+        title: `Account Request: ${formData.firstName} ${formData.lastName}`,
+        description: formattedDescription,
+        type: 'Access',
+        priority: 'Medium',
+        status: 'Open'
+      });
+
+      onSuccess();
+    } catch (err) {
+      console.error('Failed to submit account request:', err);
+      setError('Failed to submit request. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  if (submitted) {
-    return (
-      <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-lg text-center border-t-4 border-[#355E3B]">
-        <div className="mx-auto bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
-          <Send className="w-8 h-8 text-green-600" />
-        </div>
-        <h2 className="text-2xl font-bold text-[#355E3B] mb-2">Request Submitted</h2>
-        <p className="text-gray-600 mb-6">
-          Your account request has been sent to the administration for approval. You will be notified via email once your account is active.
-        </p>
-        <button onClick={onBack} className="text-[#355E3B] font-bold hover:underline">
-          Return to Login
-        </button>
-      </div>
-    );
-  }
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
   return (
-    <div className="max-w-lg mx-auto mt-10 bg-white p-8 rounded-lg shadow-xl border-t-4 border-[#355E3B]">
-      <button onClick={onBack} className="text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-6 text-sm">
-        <ArrowLeft className="w-4 h-4" /> Back
+    <div className="max-w-3xl mx-auto">
+      <button 
+        onClick={onBack}
+        className="mb-6 flex items-center text-slate-600 hover:text-slate-900 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Back to Dashboard
       </button>
-      
-      <h2 className="text-2xl font-bold text-[#355E3B] mb-1 flex items-center gap-2">
-        <UserPlus className="w-6 h-6" /> Request Account
-      </h2>
-      <p className="text-sm text-gray-500 mb-6">
-        Please fill out the details below. This request will be reviewed by the board or administration.
-      </p>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Full Name</label>
-          <input required type="text" className="w-full border p-2 rounded focus:ring-[#355E3B]" 
-            value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email Address</label>
-          <input required type="email" className="w-full border p-2 rounded focus:ring-[#355E3B]" 
-            value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requested Role</label>
-            <select className="w-full border p-2 rounded" 
-              value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
-              <option value="Parent">Parent</option>
-              <option value="Staff">Staff</option>
-              <option value="Teacher">Teacher</option>
-              <option value="Tech">Technician</option>
-              <option value="Approver">Approver</option>
-            </select>
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <UserPlus className="w-6 h-6 text-blue-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-slate-900">New Account Request</h2>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Department (If Staff)</label>
-            <select className="w-full border p-2 rounded" 
-              value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}>
-              <option value="">-- None/Parent --</option>
-              <option value="Academics">Academics</option>
-              <option value="IT">IT</option>
-              <option value="Facilities">Facilities</option>
-              <option value="Administration">Administration</option>
-            </select>
+          <p className="text-slate-600">
+            Submit a request for new user access or system permissions.
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {error && (
+            <div className="p-4 bg-red-50 text-red-700 rounded-lg flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <p>{error}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                First Name *
+              </label>
+              <input
+                type="text"
+                name="firstName"
+                required
+                value={formData.firstName}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Last Name *
+              </label>
+              <input
+                type="text"
+                name="lastName"
+                required
+                value={formData.lastName}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              />
+            </div>
           </div>
-        </div>
 
-        <div>
-          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Reason for Access</label>
-          <textarea required className="w-full border p-2 rounded h-24 focus:ring-[#355E3B]" 
-            placeholder="e.g., I am a new parent wanting to monitor public tickets..."
-            value={formData.reason} onChange={e => setFormData({...formData, reason: e.target.value})} />
-        </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Department *
+              </label>
+              <input
+                type="text"
+                name="department"
+                required
+                value={formData.department}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Job Role / Title *
+              </label>
+              <input
+                type="text"
+                name="role"
+                required
+                value={formData.role}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              />
+            </div>
+          </div>
 
-        <button type="submit" className="w-full bg-[#355E3B] text-white py-3 rounded font-bold hover:bg-green-800 transition-colors shadow-lg">
-          Submit Request
-        </button>
-      </form>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Supervisor *
+              </label>
+              <input
+                type="text"
+                name="supervisor"
+                required
+                value={formData.supervisor}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Mirror User (Optional)
+              </label>
+              <input
+                type="text"
+                name="mirrorUser"
+                placeholder="Copy permissions from..."
+                value={formData.mirrorUser}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Specify an existing user to copy permissions from.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Additional Notes
+            </label>
+            <textarea
+              name="notes"
+              rows={4}
+              value={formData.notes}
+              onChange={handleChange}
+              placeholder="Any specific systems, software, or hardware requirements..."
+              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end pt-4">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium shadow-sm hover:shadow"
+            >
+              {isSubmitting ? (
+                <>Processing...</>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  Submit Request
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

@@ -1,304 +1,187 @@
-// types.ts
-
-// --- 1. CORE CONFIGURATION ---
-export interface SiteConfig {
-  appName: string;
-  unauthorizedMessage: string;
-  supportContact: string;
-  announcementBanner: string;
-  ticketCategories: string[]; 
-  priorities: string[];       
-}
-
-// --- 2. USERS & PROFILES ---
 export interface User {
-  UserID: string;
-  Email: string;
-  Name: string;
-  User_Type: string; // Comma-separated (e.g. "Admin, Tech")
-  Department: string; // Comma-separated
-  // Extended Profile Fields (from CSV)
-  Primary_Building?: string;
-  Primary_Room?: string;
-  Grades_Taught?: string;
-  Subjects_Taught?: string;
-  Account_Status: 'Active' | 'Suspended' | 'Pending';
-  Employment_Status?: 'Employee' | 'Volunteer' | 'Contractor';
-}
-
-export interface AccountRequest {
-  RequestID: string;
-  Name: string;
-  Email: string;
-  RequestedRole: string;
-  Department?: string;
-  Reason: string;
-  DateSubmitted: string;
-  Status: 'Pending' | 'Approved' | 'Rejected';
-}
-
-// --- 3. INFRASTRUCTURE ---
-export interface Campus {
-  CampusID: string;
-  Campus_Name: string;
-  Address?: string;
-  Phone_Number?: string;
-  Campus_Map?: string;
-}
-
-export interface Building {
-  BuildingID: string;
-  CampusID_Ref: string;
-  Building_Name: string;
-  Building_Floor_Plan?: string;
-  Building_Cover_Photo?: string;
-}
-
-export interface Location {
-  LocationID: string;
-  BuildingID_Ref: string;
-  Parent_LocationID_Ref?: string;
-  Location_Name: string;
-  Category?: string;
-  Length?: number;
-  Width?: number;
-  Height?: number;
-  Square_Footage?: number;
-  Paint_Color?: string;
-  Paint_Type?: string;
-  Floor_Type?: string;
-}
-
-// --- 4. ASSETS & MAINTENANCE ---
-export interface Asset {
-  AssetID: string;
-  LocationID_Ref: string;
-  Asset_Name: string;
-  Category?: string;
-  Serial_Number?: string;
-  Warranty_Expires?: string;
-  Last_Known_Meter_Reading?: number;
-  Last_Meter_Reading_Date?: string;
-  Parent_AssetID_Ref?: string; 
-  Model_Number?: string;       
-  InstallDate?: string;        
-}
-
-export interface MeterReading {
-  ReadingID: string;
-  AssetID_Ref: string;
-  Timestamp: string;
-  Current_Reading: number;
-  Logged_By_Email: string;
-}
-
-// --- 5. WORKFLOW (Tickets & Tasks) ---
-
-// RESTORED ENUMS TO PREVENT REGRESSION
-export enum Priority {
-  LOW = 'Low',
-  MEDIUM = 'Medium',
-  HIGH = 'High',
-  CRITICAL = 'Critical'
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  department?: string;
+  status?: 'Active' | 'Inactive';
+  lastLogin?: string;
 }
 
 export enum TicketStatus {
-  NEW = 'New',
-  PENDING_APPROVAL = 'Pending Approval',
-  ASSIGNED = 'Assigned',
-  OPEN_FOR_BID = 'Open for Bid',
-  COMPLETED = 'Completed',
-  RESOLVED = 'Resolved',
-  CLOSED = 'Closed'
+  Open = 'Open',
+  InProgress = 'In Progress',
+  Resolved = 'Resolved',
+  Closed = 'Closed',
+  Pending = 'Pending'
+}
+
+export enum Priority {
+  Low = 'Low',
+  Medium = 'Medium',
+  High = 'High',
+  Critical = 'Critical'
 }
 
 export interface Ticket {
-  TicketID: string;
-  Date_Submitted: string;
-  Submitter_Email: string;
-  CampusID_Ref: string;
-  BuildingID_Ref?: string;
-  LocationID_Ref: string;
-  Related_AssetID_Ref?: string;
-  Title: string;
-  Description: string;
-  Category: string;
-  Status: string; // Compatible with string from CSV
-  Priority?: string;
-  Assigned_Staff?: string;
-  Assigned_VendorID_Ref?: string;
-  Is_Public: boolean;
-  // Advanced Triage
-  Submitter_Priority?: string;
-  Is_Urgent?: boolean;
-  Is_Important?: boolean;
-  Priority_Quadrant?: number;
-  AI_Suggested_Plan?: string;
-  AI_Questions?: string;
-  User_Answers?: string;
-  Date_Completed?: string;
-  Exclude_from_Report?: boolean;
-  Scheduled_Start_Date?: string;
-  Comments?: TicketComment[];
-}
-
-export interface TicketComment {
-  CommentID: string;
-  TicketID_Ref: string;
-  Author_Email: string;
-  Timestamp: string;
-  Comment_Text: string;
-  Visibility: 'Public' | 'Internal';
+  id: string;
+  title: string;
+  description: string;
+  status: TicketStatus;
+  priority: Priority;
+  type: string;
+  assignedTo?: string;
+  createdBy?: string;
+  createdAt?: string;
+  isPublic?: boolean;
 }
 
 export interface TicketAttachment {
-  AttachmentID: string;
-  TicketID_Ref: string;
-  File_Name: string;
-  Drive_URL: string;
-  Mime_Type: string;
-  Attachment_Type?: string;
+  id: string;
+  name: string;
+  url: string;
+  type: string;
 }
 
-export interface Task {
-  TaskID: string;
-  TicketID_Ref: string;
-  Task_Name: string;
-  Task_Status: 'Pending' | 'In Progress' | 'Done' | 'Blocked';
-  Assigned_Staff?: string;
-  Assigned_VendorID_Ref?: string;
-  Labor_Hours?: number;
-  Material_Costs?: number;
-  Vendor_Invoice_Total?: number;
-}
-
-// --- 6. INVENTORY & MATERIALS ---
-export interface Material {
-  MaterialID: string;
-  Material_Name: string;
-  Category: string;
-  Location: string;
-  Purchase_Unit_Name: string; 
-  Purchase_Unit_Cost: number;
-  Items_per_Unit: number;
-  Quantity_on_Hand: number;
-  Reorder_Point: number;
-}
-
-export interface PurchaseLog {
-  PurchaseID: string;
-  Purchase_Date: string;
-  MaterialID_Ref: string;
-  VendorID_Ref: string;
-  Quantity_Purchased: number;
-  Total_Cost_for_Item: number;
-}
-
-// --- 7. VENDORS & PROCUREMENT ---
 export interface Vendor {
-  VendorID: string;
-  Vendor_Name: string; 
-  Specialty?: string;
-  Contact_Person?: string;
-  Phone?: string;
-  Email?: string;
-  Address?: string;
-  Website?: string;
-  Status?: string;
-  ServiceType?: string;
-  DateJoined?: string;
+  id: string;
+  name: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  category: string;
+  status: 'Active' | 'Inactive' | 'Pending';
+  rating: number;
+  services: string[];
 }
 
 export interface VendorBid {
-  BidID: string;
-  TicketID_Ref: string;
-  VendorID_Ref: string;
-  VendorName?: string; 
-  Amount: number;
-  Notes: string;
-  DateSubmitted: string;
-  Status: 'Pending' | 'Accepted' | 'Rejected';
+  id: string;
+  vendorName: string;
+  amount: number;
+  date: string;
+  status: 'Pending' | 'Accepted' | 'Rejected';
 }
 
 export interface VendorReview {
-  ReviewID: string;
-  VendorID_Ref: string;
-  TicketID_Ref: string;
-  Author_Email: string;
-  Rating: number; 
-  Comment: string;
-  Timestamp: string;
-}
-
-// --- 8. OPERATIONS ---
-export interface MaintenanceSchedule {
-  PM_ID: string;
-  AssetID_Ref: string;
-  Task_Name: string;
-  Frequency: string;
-  Next_Due_Date: string;
-  Meter_Frequency_Trigger?: number;
-  Meter_Type?: string;
-  Meter_Trigger_At?: number;
+  id: string;
+  vendorId: string;
+  rating: number;
+  comment: string;
+  date: string;
 }
 
 export interface SOP {
-  SOP_ID: string;
-  SOP_Title: string;
-  Category?: string;
-  Concise_Procedure_Text: string;
-  Google_Doc_Link: string;
-  AI_Prompt?: string;
+  id: string;
+  title: string;
+  category: string;
+  content: string;
+  version: string;
+  lastUpdated: string;
 }
 
-export interface AssetSOPLink {
-  Link_ID: string;
-  AssetID_Ref: string;
-  SOP_ID_Ref: string;
+export interface MaintenanceSchedule {
+  id: string;
+  equipment: string;
+  task: string;
+  frequency: string;
+  nextDue: string;
+  status: string;
+  assignedTo: string;
 }
 
-export interface Document {
-  DocumentID: string;
-  Document_Name: string;
-  Document_Type: string;
-  Category: string;
-  Document_File?: string;
-  Upload_Date: string;
+export interface InventoryItem {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  minLevel: number;
+  location: string;
+  lastRestocked: string;
 }
 
-// --- 9. PERMISSIONS (GRANULAR) ---
-export type Permission = 
-  | 'VIEW_DASHBOARD' | 'VIEW_ADMIN_PANEL'
-  | 'TICKET_CREATE' | 'TICKET_READ_OWN' | 'TICKET_READ_DEPT' | 'TICKET_READ_ALL' | 'TICKET_UPDATE_OWN' | 'TICKET_UPDATE_ALL' | 'TICKET_DELETE' | 'TICKET_ASSIGN' | 'TICKET_APPROVE' | 'TICKET_MERGE'
-  | 'TASK_CREATE' | 'TASK_UPDATE' | 'TASK_DELETE'
-  | 'ASSET_READ' | 'ASSET_CREATE' | 'ASSET_UPDATE' | 'ASSET_DELETE'
-  | 'INVENTORY_READ' | 'INVENTORY_ADJUST' | 'INVENTORY_PURCHASE'
-  | 'VENDOR_READ' | 'VENDOR_MANAGE' | 'VENDOR_APPROVE'
-  | 'USER_READ' | 'USER_MANAGE' | 'ROLE_MANAGE'
-  | 'SOP_READ' | 'SOP_MANAGE' | 'DOC_MANAGE'
-  | 'VIEW_MY_TICKETS' | 'VIEW_DEPT_TICKETS' | 'VIEW_CAMPUS_TICKETS' | 'VIEW_ALL_BIDS' 
-  | 'MANAGE_ASSETS' | 'MANAGE_USERS' | 'MANAGE_VENDORS' | 'MANAGE_ROLES' | 'MANAGE_SETTINGS' 
-  | 'MANAGE_SOPS' | 'MANAGE_SCHEDULES' | 'ASSIGN_TICKETS' | 'APPROVE_TICKETS' | 'CLAIM_TICKETS' | 'MERGE_TICKETS';
+// --- NEW: Material (Alias/Interface for InventoryManager) ---
+export interface Material {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  minLevel: number;
+  unit: string;
+  location: string;
+  lastUpdated?: string;
+}
+
+export interface Asset {
+  id: string;
+  name: string;
+  type: string;
+  locationId: string;
+  status: string;
+  serialNumber?: string;
+  purchaseDate?: string;
+  notes?: string;
+}
+
+export interface Campus {
+  id: string;
+  name: string;
+  code: string;
+}
+
+export interface Building {
+  id: string;
+  campusId: string;
+  name: string;
+  type?: string; 
+}
+
+export interface Location {
+  id: string;
+  buildingId: string;
+  name: string;
+  type: string;
+}
+
+export interface SiteConfig {
+  siteName: string;
+  supportEmail: string;
+  primaryColor: string;
+  logoUrl?: string;
+}
+
+export interface Permission {
+  id: string;
+  name: string;
+  description: string;
+  module: string;
+}
 
 export interface RoleDefinition {
-  RoleName: string;
-  Description: string;
-  Permissions: Permission[];
-}
-
-// --- 10. MAPPINGS ---
-export interface AppField {
   id: string;
-  category: string;
-  label: string;
+  name: string;
   description: string;
-  type: 'text' | 'number' | 'date' | 'boolean' | 'select' | 'email' | 'url';
+  permissions: string[];
+  isSystem?: boolean;
 }
 
-export interface FieldMapping {
-  MappingID: string;
-  SheetName: string;
-  SheetHeader: string;
-  AppFieldID: string;
-  Description?: string;
+export interface KBArticle {
+  id: string;
+  title: string;
+  category: string;
+  content: string;
+  tags: string[];
+  lastUpdated: string;
+  author: string;
+}
+
+export interface AccountRequest {
+  id: string;
+  applicantName: string;
+  department: string;
+  role: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  requestDate: string;
+  type: string;
+  details?: string;
 }
