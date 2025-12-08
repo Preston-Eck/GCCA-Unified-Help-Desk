@@ -1,7 +1,6 @@
 // src/services/api.ts
 
 // Helper to talk to Google Apps Script
-// FIXED: Exported runServer so it can be used by dataService
 export const runServer = (fnName: string, ...args: any[]): Promise<any> => {
   return new Promise((resolve, reject) => {
     // @ts-ignore
@@ -22,13 +21,14 @@ export const runServer = (fnName: string, ...args: any[]): Promise<any> => {
 export const getDatabaseData = async () => runServer('getDatabaseData');
 export const getSessionUserEmail = async () => runServer('getSessionUserEmail');
 export const updateConfig = async (config: any) => runServer('updateConfig', config);
-export const getSchema = async () => runServer('getSchema'); // Added
+export const getSchema = async () => runServer('getSchema');
 
-// --- TICKETS ---
+// --- TICKETS & TASKS ---
 export const submitTicket = async (data: any) => runServer('saveTicket', data);
 export const updateTicketStatus = async (id: string, status: string, assignedTo?: string) => runServer('saveTicket', { TicketID: id, Status: status, Assigned_Staff: assignedTo });
 export const saveTicket = async (data: any) => runServer('saveTicket', data);
-export const saveComment = async (data: any) => runServer('saveComment', data); // Added
+export const saveComment = async (data: any) => runServer('saveComment', data);
+export const saveTask = async (data: any) => runServer('saveTask', data); // FIXED: Added saveTask
 
 // --- ASSETS & INFRASTRUCTURE ---
 export const saveCampus = async (data: any) => runServer('saveCampus', data);
@@ -42,7 +42,7 @@ export const deleteLocation = async (id: string) => runServer('deleteLocation', 
 
 export const saveAsset = async (data: any) => runServer('saveAsset', data);
 export const deleteAsset = async (id: string) => runServer('deleteAsset', id);
-export const linkSOP = async (assetId: string, sopId: string) => runServer('linkSOP', assetId, sopId); // Added
+export const linkSOP = async (assetId: string, sopId: string) => runServer('linkSOP', assetId, sopId);
 
 // --- USERS & ROLES ---
 export const saveUser = async (data: any) => runServer('saveUser', data);

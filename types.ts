@@ -43,6 +43,17 @@ export interface TicketAttachment {
   type: string;
 }
 
+// --- NEW: Task Interface (Fixed Missing Export) ---
+export interface Task {
+  id?: string;
+  TaskID: string;
+  Task_Name: string;
+  Task_Status: string;
+  TicketID_Ref: string;
+  Assigned_To?: string;
+  Due_Date?: string;
+}
+
 export interface Vendor {
   id: string;
   name: string;
@@ -100,7 +111,6 @@ export interface InventoryItem {
   lastRestocked: string;
 }
 
-// --- NEW: Material (Alias/Interface for InventoryManager) ---
 export interface Material {
   id: string;
   name: string;

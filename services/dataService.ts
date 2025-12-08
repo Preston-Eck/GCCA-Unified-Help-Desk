@@ -1,4 +1,4 @@
-import { Ticket, SOP, MaintenanceSchedule, InventoryItem, User, Asset, Campus, Building, Location, SiteConfig, RoleDefinition, KBArticle, AccountRequest, Vendor, Material } from '../types';
+import { Ticket, SOP, MaintenanceSchedule, InventoryItem, User, Asset, Campus, Building, Location, SiteConfig, RoleDefinition, KBArticle, AccountRequest, Vendor, Material, Task } from '../types';
 import * as API from './api';
 
 // ==========================================
@@ -8,7 +8,8 @@ let CACHE: Record<string, any[]> = {
   'Tickets': [], 'SOPs': [], 'Maintenance': [], 'Inventory': [],
   'Campuses': [], 'Buildings': [], 'Locations': [], 'Assets': [],
   'Mappings': [], 'Comments': [], 'Attachments': [],
-  'Roles': [], 'Users': [], 'AccountRequests': [], 'Vendors': []
+  'Roles': [], 'Users': [], 'AccountRequests': [], 'Vendors': [],
+  'Tasks': [], 'Bids': []
 };
 
 let APP_CONFIG: SiteConfig = {
@@ -23,15 +24,12 @@ const normalize = (item: any, idField: string) => {
   const newItem = { ...item, id: item[idField] || item.id };
   
   // --- MAPPING FIXES (Backend -> Frontend) ---
-  
-  // Users
   if (item.Email) newItem.email = item.Email;
   if (item.Name) newItem.name = item.Name;
   if (item.User_Type) newItem.role = item.User_Type;
   if (item.Department) newItem.department = item.Department;
   if (item.Account_Status) newItem.status = item.Account_Status;
 
-  // Tickets
   if (item.Date_Submitted) newItem.createdAt = item.Date_Submitted;
   if (item.Submitter_Email) newItem.createdBy = item.Submitter_Email;
   if (item.Status) newItem.status = item.Status;
@@ -41,13 +39,11 @@ const normalize = (item: any, idField: string) => {
   if (item.Priority) newItem.priority = item.Priority;
   if (item.Assigned_Staff) newItem.assignedTo = item.Assigned_Staff;
 
-  // Assets / Locations
   if (item.Asset_Name) newItem.name = item.Asset_Name;
   if (item.Location_Name) newItem.name = item.Location_Name;
   if (item.Building_Name) newItem.name = item.Building_Name;
   if (item.Campus_Name) newItem.name = item.Campus_Name;
 
-  // Materials
   if (item.Material_Name) newItem.name = item.Material_Name;
   if (item.Quantity_on_Hand) newItem.quantity = item.Quantity_on_Hand;
   if (item.Reorder_Point) newItem.minLevel = item.Reorder_Point;
@@ -60,7 +56,6 @@ const toBackend = (item: any, idField: string) => {
   const { id, ...rest } = item;
   const backendItem = { ...rest, [idField]: id || item[idField] };
   
-  // Mapping back to Backend Columns if needed
   if (item.createdAt) backendItem.Date_Submitted = item.createdAt;
   if (item.createdBy) backendItem.Submitter_Email = item.createdBy;
   if (item.status) backendItem.Status = item.status;
@@ -82,7 +77,6 @@ export const initDatabase = async () => {
       return;
     }
 
-    // Load and Normalize Data
     CACHE['Tickets'] = (data.TICKETS || []).map((t: any) => normalize(t, 'TicketID'));
     CACHE['SOPs'] = (data.SOPS || []).map((s: any) => normalize(s, 'SOP_ID'));
     CACHE['Maintenance'] = (data.SCHEDULES || []).map((s: any) => normalize(s, 'PM_ID'));
@@ -96,6 +90,7 @@ export const initDatabase = async () => {
     CACHE['Vendors'] = (data.VENDORS || []).map((v: any) => normalize(v, 'VendorID'));
     CACHE['Mappings'] = (data.MAPPINGS || []).map((m: any) => normalize(m, 'MappingID'));
     CACHE['AccountRequests'] = (data.REQUESTS || []).map((r: any) => normalize(r, 'RequestID'));
+    CACHE['Tasks'] = (data.TASKS || []).map((t: any) => normalize(t, 'TaskID'));
     
     if (data.CONFIG && data.CONFIG.length > 0) {
        APP_CONFIG = { ...APP_CONFIG, ...data.CONFIG[0] };
@@ -134,21 +129,12 @@ const updateCache = (listName: string, item: any, isDelete = false) => {
 
 // --- Users & Permissions ---
 export const getCurrentUser = async (): Promise<User> => {
-  // In real mode, App.tsx handles user resolution
   return CACHE['Users'][0] || {} as User;
 };
 
 export const getUsers = () => getItems('Users');
-
-export const saveUser = async (user: any) => {
-  updateCache('Users', user);
-  return API.saveUser(toBackend(user, 'UserID'));
-};
-
-export const deleteUser = async (id: string) => {
-  updateCache('Users', { id }, true);
-  return API.deleteUser(id);
-};
+export const saveUser = async (user: any) => { updateCache('Users', user); return API.saveUser(toBackend(user, 'UserID')); };
+export const deleteUser = async (id: string) => { updateCache('Users', { id }, true); return API.deleteUser(id); };
 
 export const hasPermission = (user: any, permission: string) => {
   if (user?.role?.includes('Admin')) return true;
@@ -156,23 +142,13 @@ export const hasPermission = (user: any, permission: string) => {
 };
 
 export const getRoles = () => getItems('Roles');
-export const saveRole = async (role: any) => {
-  updateCache('Roles', role);
-  return API.saveRole(toBackend(role, 'RoleName'));
-};
-export const deleteRole = async (id: string) => {
-  updateCache('Roles', { id }, true);
-  return API.deleteRole(id);
-};
+export const saveRole = async (role: any) => { updateCache('Roles', role); return API.saveRole(toBackend(role, 'RoleName')); };
+export const deleteRole = async (id: string) => { updateCache('Roles', { id }, true); return API.deleteRole(id); };
 
 // --- Tickets ---
 export const getTickets = () => getItems('Tickets');
 export const getTicketsForUser = (userId: string) => getItems('Tickets'); 
-
-export const getTicketById = (id: string) => {
-  const tickets = getItems('Tickets');
-  return tickets.find(t => t.id === id);
-};
+export const getTicketById = (id: string) => getItems('Tickets').find(t => t.id === id);
 
 export const submitTicket = async (userEmail: string | any, data?: any) => {
   const ticketData = typeof userEmail === 'object' ? userEmail : data;
@@ -198,10 +174,7 @@ export const updateTicketStatus = async (id: string, status: string) => {
   updateCache('Tickets', { id, status }); 
   return API.updateTicketStatus(id, status);
 };
-
-export const claimTicket = async (id: string) => {
-  return API.updateTicketStatus(id, 'Assigned');
-};
+export const claimTicket = async (id: string) => API.updateTicketStatus(id, 'Assigned');
 
 // --- Assets ---
 export const getCampuses = () => getItems('Campuses');
@@ -214,14 +187,11 @@ export const getBuildings = (campusId?: string) => {
 };
 export const saveBuilding = async (b: any) => { updateCache('Buildings', b); return API.saveBuilding(toBackend(b, 'BuildingID')); };
 export const deleteBuilding = async (id: string) => { updateCache('Buildings', {id}, true); return API.deleteBuilding(id); };
-
-// ALIAS: addBuilding (Used by AssetManager)
 export const addBuilding = async (data: any, name?: string) => {
   const building = name ? { ...data, Building_Name: name, id: 'B-'+Date.now() } : { ...data, id: 'B-'+Date.now() };
   updateCache('Buildings', building);
   return API.saveBuilding(toBackend(building, 'BuildingID'));
 };
-
 export const updateBuilding = async (id: string, data: any) => {
   const updated = { ...data, id };
   updateCache('Buildings', updated);
@@ -236,11 +206,15 @@ export const addLocation = async (buildingId: any, name?: string) => {
   const newItem = typeof buildingId === 'object' 
     ? buildingId 
     : { id: 'L-'+Date.now(), Location_Name: name, BuildingID_Ref: buildingId };
-    
   updateCache('Locations', newItem);
   return API.saveLocation(toBackend(newItem, 'LocationID'));
 };
 export const deleteLocation = async (id: string) => { updateCache('Locations', {id}, true); return API.deleteLocation(id); };
+export const updateLocation = (id: string, data: any) => {
+  const item = { ...data, id };
+  updateCache('Locations', item);
+  return API.saveLocation(toBackend(item, 'LocationID'));
+};
 
 export const getAssets = (locationId?: string) => {
   const all = getItems('Assets');
@@ -250,36 +224,30 @@ export const addAsset = async (locationId: any, name?: string) => {
   const newItem = typeof locationId === 'object'
     ? locationId
     : { id: 'A-'+Date.now(), Asset_Name: name, LocationID_Ref: locationId, status: 'Active' };
-
   updateCache('Assets', newItem);
   return API.saveAsset(toBackend(newItem, 'AssetID'));
 };
 export const deleteAsset = async (id: string) => { updateCache('Assets', {id}, true); return API.deleteAsset(id); };
-
-export const updateLocation = (id: string, data: any) => {
-  const item = { ...data, id };
-  updateCache('Locations', item);
-  return API.saveLocation(toBackend(item, 'LocationID'));
-};
 export const updateAsset = (id: string, data: any) => {
   const item = { ...data, id };
   updateCache('Assets', item);
   return API.saveAsset(toBackend(item, 'AssetID'));
 };
+export const getAssetDetails = async (id: string) => getItems('Assets').find(a => a.id === id);
 
 
 // --- Inventory & Vendors ---
 export const getInventory = () => getItems('Inventory');
-export const saveMaterial = async (m: any) => { 
-  updateCache('Inventory', m); 
-  return API.saveMaterial(toBackend(m, 'MaterialID')); 
-};
+export const saveMaterial = async (m: any) => { updateCache('Inventory', m); return API.saveMaterial(toBackend(m, 'MaterialID')); };
+// Aliases for compatibility
+export const getAllInventory = getInventory;
+export const addInventoryItem = async (data: any) => saveMaterial(data);
+export const updateInventoryQuantity = async (id: string, q: number) => {}; // Implement if needed
+export const updateInventoryItem = async (id: string, data: any) => saveMaterial({ ...data, id });
+export const deleteInventoryItem = async (id: string) => {}; 
 
 export const getVendors = () => getItems('Vendors');
-export const saveVendor = async (v: any) => { 
-  updateCache('Vendors', v); 
-  return API.saveVendor(toBackend(v, 'VendorID')); 
-};
+export const saveVendor = async (v: any) => { updateCache('Vendors', v); return API.saveVendor(toBackend(v, 'VendorID')); };
 export const updateVendorStatus = async (id: string, status: string) => {
   const vendor = CACHE['Vendors'].find(v => v.id === id);
   if (vendor) {
@@ -314,7 +282,7 @@ export const verifyOtp = async (email: string, code: string) => {
 
 // --- Operations & Maintenance ---
 export const getAllMaintenanceSchedules = () => getItems('Maintenance');
-export const getMaintenanceSchedules = () => getItems('Maintenance');
+export const getMaintenanceSchedules = getAllMaintenanceSchedules;
 export const saveMaintenanceSchedule = async (data: any) => {
   updateCache('Maintenance', data);
   return API.saveSchedule(toBackend(data, 'PM_ID'));
@@ -325,9 +293,9 @@ export const checkAndGeneratePMTickets = async () => {};
 export const getAccountRequests = () => getItems('AccountRequests');
 export const rejectAccountRequest = async (id: string) => {}; 
 export const approveAccountRequest = async (id: string) => {}; 
-export const getSOPsForAsset = (id: string) => [];
 
 export const getAllSOPs = () => getItems('SOPs');
+export const getSOPsForAsset = (id: string) => [];
 export const addSOP = async (data: any) => {
   updateCache('SOPs', data);
   return API.saveSOP(toBackend(data, 'SOP_ID'));
@@ -339,7 +307,24 @@ export const updateSOP = async (id: string, data: any) => {
 };
 export const deleteSOP = async (id: string) => {};
 
-// Generic Wrappers
+// --- Task Manager (FIXED) ---
+export const getTasks = (ticketId: string) => getItems('Tasks').filter(t => t.TicketID_Ref === ticketId);
+export const saveTask = async (task: any) => {
+  const newTask = { ...task, id: task.id || 'TSK-' + Date.now() };
+  updateCache('Tasks', newTask);
+  return API.saveTask(toBackend(newTask, 'TaskID')); 
+};
+
+// --- Vendor Portal (RESTORED) ---
+export const getOpenTicketsForVendors = () => getItems('Tickets').filter(t => t.status === 'Open' || t.status === 'New');
+export const submitBid = async (vendorId: string, ticketId: string, amount: number, notes: string, files: File[]) => {
+  console.log("Submitting bid", { vendorId, ticketId, amount });
+};
+export const registerVendor = async (data: any) => saveVendor({ ...data, Status: 'Pending' });
+export const getVendorTickets = (vendorId: string) => getItems('Tickets').filter(t => t.Assigned_Vendor === vendorId);
+
+
+// --- Generic Wrappers ---
 export const addItem = async (list: string, data: any) => {
   if (list === 'SOPs') return addSOP(data);
   if (list === 'Maintenance') return saveMaintenanceSchedule(data);
@@ -350,13 +335,6 @@ export const updateItem = async (list: string, id: string, data: any) => {
 };
 export const deleteItem = async (list: string, id: string) => {};
 
-export const getAllInventory = () => getItems('Inventory');
-export const addInventoryItem = async (data: any) => saveMaterial(data);
-export const updateInventoryQuantity = async (id: string, q: number) => {};
-export const updateInventoryItem = async (id: string, data: any) => saveMaterial({ ...data, id });
-export const deleteInventoryItem = async (id: string) => {};
-
-export const getAssetDetails = async (id: string) => getItems('Assets').find(a => a.id === id);
 
 // --- Mapping & Files ---
 export const APP_FIELDS = [
