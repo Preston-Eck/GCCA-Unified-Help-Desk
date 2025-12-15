@@ -18,7 +18,12 @@ const RoleManager: React.FC = () => {
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [selectedRole, setSelectedRole] = useState<RoleDefinition | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState<RoleDefinition>({ RoleName: '', Description: '', Permissions: [] });
+  const [editForm, setEditForm] = useState<RoleDefinition>({ 
+    id: '',
+    name: '', 
+    description: '', 
+    permissions: [] 
+  });
 
   useEffect(() => {
     setRoles(getRoles());
@@ -31,14 +36,14 @@ const RoleManager: React.FC = () => {
   };
 
   const handleCreate = () => {
-    const newRole = { RoleName: 'New Role', Description: '', Permissions: [] };
+    const newRole = { id: '', name: 'New Role', description: '', permissions: [] };
     setSelectedRole(null);
     setEditForm(newRole);
     setIsEditing(true);
   };
 
   const handleSave = () => {
-    if (editForm.RoleName) {
+    if (editForm.name) {
       saveRole(editForm);
       setRoles(getRoles()); // Reload from cache
       setSelectedRole(editForm);
@@ -54,12 +59,12 @@ const RoleManager: React.FC = () => {
     }
   };
 
-  const togglePermission = (perm: Permission) => {
-    const current = editForm.Permissions;
+  const togglePermission = (perm: string) => {
+    const current = editForm.permissions || [];
     const updated = current.includes(perm) 
       ? current.filter(p => p !== perm) 
       : [...current, perm];
-    setEditForm({ ...editForm, Permissions: updated });
+    setEditForm({ ...editForm, permissions: updated });
   };
 
   return (
@@ -78,15 +83,15 @@ const RoleManager: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {roles.map(r => (
             <button
-              key={r.RoleName}
+              key={r.name} // Using name as key since IDs might be generated
               onClick={() => handleSelect(r)}
               className={`w-full text-left px-3 py-2 rounded text-sm font-medium flex justify-between items-center ${
-                selectedRole?.RoleName === r.RoleName || (isEditing && editForm.RoleName === r.RoleName)
+                selectedRole?.name === r.name || (isEditing && editForm.name === r.name)
                   ? 'bg-white shadow border border-gray-200 text-[#355E3B]' 
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              {r.RoleName}
+              {r.name}
             </button>
           ))}
         </div>
@@ -102,21 +107,21 @@ const RoleManager: React.FC = () => {
                   <div className="space-y-3 max-w-md">
                     <input 
                       className="text-2xl font-bold text-gray-900 border-b border-gray-300 w-full focus:outline-none focus:border-[#355E3B] bg-transparent"
-                      value={editForm.RoleName}
-                      onChange={e => setEditForm({ ...editForm, RoleName: e.target.value })}
+                      value={editForm.name}
+                      onChange={e => setEditForm({ ...editForm, name: e.target.value })}
                       placeholder="Role Name"
                     />
                     <input 
                       className="text-sm text-gray-600 border-b border-gray-300 w-full focus:outline-none focus:border-[#355E3B] bg-transparent"
-                      value={editForm.Description}
-                      onChange={e => setEditForm({ ...editForm, Description: e.target.value })}
+                      value={editForm.description}
+                      onChange={e => setEditForm({ ...editForm, description: e.target.value })}
                       placeholder="Role Description"
                     />
                   </div>
                 ) : (
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900">{selectedRole?.RoleName}</h2>
-                    <p className="text-gray-500 text-sm mt-1">{selectedRole?.Description}</p>
+                    <h2 className="text-2xl font-bold text-gray-900">{selectedRole?.name}</h2>
+                    <p className="text-gray-500 text-sm mt-1">{selectedRole?.description}</p>
                   </div>
                 )}
               </div>
@@ -126,7 +131,7 @@ const RoleManager: React.FC = () => {
                     <button onClick={handleSave} className="bg-[#355E3B] text-white px-4 py-2 rounded font-bold flex items-center gap-2 hover:bg-green-800">
                       <Save className="w-4 h-4" /> Save Role
                     </button>
-                    <button onClick={() => { setIsEditing(false); setSelectedRole(roles.find(r => r.RoleName === editForm.RoleName) || null); }} className="border border-gray-300 px-3 py-2 rounded text-gray-600 hover:bg-gray-100">
+                    <button onClick={() => { setIsEditing(false); setSelectedRole(roles.find(r => r.name === editForm.name) || null); }} className="border border-gray-300 px-3 py-2 rounded text-gray-600 hover:bg-gray-100">
                       Cancel
                     </button>
                   </>
@@ -135,7 +140,7 @@ const RoleManager: React.FC = () => {
                     <button onClick={() => { setEditForm(selectedRole!); setIsEditing(true); }} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded font-bold hover:bg-indigo-100">
                       Edit Permissions
                     </button>
-                    <button onClick={() => handleDelete(selectedRole!.RoleName)} className="text-red-600 px-3 py-2 rounded hover:bg-red-50">
+                    <button onClick={() => handleDelete(selectedRole!.name)} className="text-red-600 px-3 py-2 rounded hover:bg-red-50">
                       <Trash2 className="w-5 h-5" />
                     </button>
                   </>
@@ -152,11 +157,11 @@ const RoleManager: React.FC = () => {
                     </div>
                     <div className="p-2 space-y-1">
                       {perms.map((perm) => {
-                        const isActive = editForm.Permissions.includes(perm as Permission);
+                        const isActive = (editForm.permissions || []).includes(perm);
                         return (
                           <div 
                             key={perm} 
-                            onClick={() => isEditing && togglePermission(perm as Permission)}
+                            onClick={() => isEditing && togglePermission(perm)}
                             className={`flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors ${
                               isEditing ? 'cursor-pointer hover:bg-gray-50' : ''
                             } ${isActive ? 'bg-green-50 text-green-900' : 'text-gray-500'}`}

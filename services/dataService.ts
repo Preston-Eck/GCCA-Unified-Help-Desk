@@ -30,6 +30,19 @@ const normalize = (item: any, idField: string) => {
   if (item.Department) newItem.department = item.Department;
   if (item.Account_Status) newItem.status = item.Account_Status;
 
+  // Role Normalization (FIXED: Parse Permissions)
+  if (item.RoleName) newItem.name = item.RoleName;
+  if (item.Description) newItem.description = item.Description;
+  if (item.Permissions) {
+    try {
+      // Handle both JSON string or pre-parsed array
+      newItem.permissions = typeof item.Permissions === 'string' ? JSON.parse(item.Permissions) : item.Permissions;
+    } catch (e) {
+      console.warn("Failed to parse permissions for role:", item.RoleName);
+      newItem.permissions = [];
+    }
+  }
+
   if (item.Date_Submitted) newItem.createdAt = item.Date_Submitted;
   if (item.Submitter_Email) newItem.createdBy = item.Submitter_Email;
   if (item.Status) newItem.status = item.Status;
@@ -62,6 +75,11 @@ const toBackend = (item: any, idField: string) => {
   if (item.email) backendItem.Email = item.email;
   if (item.name) backendItem.Name = item.name;
   if (item.role) backendItem.User_Type = item.role;
+
+  // Role Mapping (FIXED: Stringify Permissions)
+  if (item.name && idField === 'RoleName') backendItem.RoleName = item.name;
+  if (item.description && idField === 'RoleName') backendItem.Description = item.description;
+  if (item.permissions && idField === 'RoleName') backendItem.Permissions = JSON.stringify(item.permissions);
   
   return backendItem;
 };
@@ -138,11 +156,16 @@ export const deleteUser = async (id: string) => { updateCache('Users', { id }, t
 
 export const hasPermission = (user: any, permission: string) => {
   if (user?.role?.includes('Admin')) return true;
+  // TODO: Check granular roles
   return true; 
 };
 
 export const getRoles = () => getItems('Roles');
-export const saveRole = async (role: any) => { updateCache('Roles', role); return API.saveRole(toBackend(role, 'RoleName')); };
+export const saveRole = async (role: any) => { 
+  updateCache('Roles', role); 
+  // 'id' is RoleName for roles, so we use that as the ID field
+  return API.saveRole(toBackend(role, 'RoleName')); 
+};
 export const deleteRole = async (id: string) => { updateCache('Roles', { id }, true); return API.deleteRole(id); };
 
 // --- Tickets ---
@@ -239,10 +262,9 @@ export const getAssetDetails = async (id: string) => getItems('Assets').find(a =
 // --- Inventory & Vendors ---
 export const getInventory = () => getItems('Inventory');
 export const saveMaterial = async (m: any) => { updateCache('Inventory', m); return API.saveMaterial(toBackend(m, 'MaterialID')); };
-// Aliases for compatibility
 export const getAllInventory = getInventory;
 export const addInventoryItem = async (data: any) => saveMaterial(data);
-export const updateInventoryQuantity = async (id: string, q: number) => {}; // Implement if needed
+export const updateInventoryQuantity = async (id: string, q: number) => {};
 export const updateInventoryItem = async (id: string, data: any) => saveMaterial({ ...data, id });
 export const deleteInventoryItem = async (id: string) => {}; 
 
@@ -307,7 +329,7 @@ export const updateSOP = async (id: string, data: any) => {
 };
 export const deleteSOP = async (id: string) => {};
 
-// --- Task Manager (FIXED) ---
+// --- Task Manager ---
 export const getTasks = (ticketId: string) => getItems('Tasks').filter(t => t.TicketID_Ref === ticketId);
 export const saveTask = async (task: any) => {
   const newTask = { ...task, id: task.id || 'TSK-' + Date.now() };
@@ -315,7 +337,7 @@ export const saveTask = async (task: any) => {
   return API.saveTask(toBackend(newTask, 'TaskID')); 
 };
 
-// --- Vendor Portal (RESTORED) ---
+// --- Vendor Portal ---
 export const getOpenTicketsForVendors = () => getItems('Tickets').filter(t => t.status === 'Open' || t.status === 'New');
 export const submitBid = async (vendorId: string, ticketId: string, amount: number, notes: string, files: File[]) => {
   console.log("Submitting bid", { vendorId, ticketId, amount });
